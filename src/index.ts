@@ -11,3 +11,4 @@ export type {
   Finding,
   Location,
 } from './model.ts';
+export type { ScanOptions } from './projects.ts';

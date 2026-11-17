@@ -16,6 +16,7 @@ node dist/cli.js test/fixtures/basic
 node dist/cli.js test/fixtures/basic --symbol normalize
 node dist/cli.js test/fixtures/basic --format json
 node dist/cli.js test/fixtures/basic --format markdown
+node dist/cli.js . --project tsconfig.build.json --exclude '**/generated/**' --test 'qa/**'
 ```
 
 The optional directory argument defaults to the current directory. `--output` writes to a new file and refuses to
@@ -69,15 +70,29 @@ excluded from the root file list, as with the compiler itself. Without a configu
 Discovery does not follow symlinks or enter `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, `.nuxt` or
 `.output`. Declaration files are excluded from the inventory, though compiler resolution may read them. Discovered
 source files excluded by project configuration or declaration-file status are listed with a reason. Ignored directory
-contents and non-source files are outside the discovery scope. Separate scans are required for multiple tsconfigs.
+contents and non-source files are outside the discovery scope. Use repeated `--project` arguments to select config files relative to the scan root. Each selected
+config and its transitive project references use their own compiler options. A solution config with an empty
+`files` list can select an entire reference graph.
+
+Each analyzed file contributes its declarations and usages once. When multiple configs explicitly include a file,
+the config with the shortest relative path to that file owns it. Config path order breaks ties. Imported files
+outside all root lists use the first importing project in config path order. The file record names the owner.
+For a shared file whose aliases resolve differently between projects, scan each project separately to inspect
+the alternative interpretation.
+
+`--exclude` removes matching files from the inventory even when imported. `--test`, `--tooling` and `--production`
+override scope conventions in that order. Each accepts repeatable, quoted globs matching slash-separated paths
+relative to the scan root. The same options are available through `scan(root, { projects, exclude, scopes })`,
+where `scopes` maps each scope name to an array of globs.
 
 Diagnostics identify parse errors, unresolved imports/calls, computed module paths, accessors and mutable function
 bindings. Accessor declarations are listed, but implicit getter/setter dispatch is not resolved. Runtime mutation,
 reflection, framework conventions and unsupported alias patterns can hide usages. Consumers should inspect both the
 diagnostics and these limits; `complete` only means no diagnostics were generated within the supported analysis.
 
-Snapshots hash analyzed/discovered source and the root configuration, but do not fingerprint installed declarations,
-package metadata or inherited configuration. Inherited configuration receives a diagnostic. Snapshot IDs identify
+Snapshots hash discovered source and the files read while parsing compiler configuration, including inherited
+configs. JSON records the selected entries, the project graph's config paths and those input hashes.
+Installed declarations and package metadata used only for source module resolution are outside this fingerprint. Snapshot IDs identify
 the resulting report; they are not an incremental-cache key covering every input. Symbol IDs use declaration locations
 and are only stable within an unchanged snapshot. Offsets are zero-based UTF-16; lines and columns are one-based.
 

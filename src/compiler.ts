@@ -1,8 +1,10 @@
 import ts from 'typescript';
 import { isBuiltin } from 'node:module';
-import { existsSync, realpathSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { compare, discover, hash, hashFile, portablePath, scopeOf } from './discovery.ts';
+import { realpathSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { loadProjects, projectOwners, fileRules } from './projects.ts';
+import type { Project, ScanOptions } from './projects.ts';
+import { compare, discover, hash, hashFile, portablePath } from './discovery.ts';
 import type { CodeSymbol, Diagnostic, Inventory, Location, ReferenceKind, SymbolKind } from './model.ts';
 
 const limitations = [
@@ -10,64 +12,24 @@ const limitations = [
   'Public exports may have consumers outside the scanned root.',
   'Reflection, framework conventions, mutable aliases and runtime dispatch may hide usages.',
   'Default discovery omits dependency/build directories and does not follow symlinks.',
-  'Only the root tsconfig.json or jsconfig.json is used; project-reference builds are not performed.',
+  'Each source file is counted in one project context; configuration-dependent alternatives may differ.',
   'Symbol IDs are snapshot-local and may change when source locations change.',
 ];
 
 /** Scan a project using the compiler API without emitting or executing project code. */
-export function scan(rootDirectory: string): Inventory {
+export function scan(rootDirectory: string, settings: ScanOptions = {}): Inventory {
   const root = realpathSync(rootDirectory);
   const discovered = discover(root);
-  const configPath = ['tsconfig.json', 'jsconfig.json'].map((name) => resolve(root, name)).find(existsSync);
+  const rules = fileRules(settings);
+  const projects = loadProjects(root, settings.projects);
+  const owners = projectOwners(projects.ordered);
   const diagnostics: Diagnostic[] = [];
-  let selected = discovered.filter((path) => !/\.d\.[cm]?ts$/.test(path));
-  let options: ts.CompilerOptions = {
-    target: ts.ScriptTarget.ESNext,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    jsx: ts.JsxEmit.Preserve,
-  };
-
-  if (configPath) {
-    const config = ts.readConfigFile(configPath, ts.sys.readFile);
-    if (config.error) addCompilerDiagnostic(config.error);
-    else {
-      const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, dirname(configPath));
-      for (const error of parsed.errors) addCompilerDiagnostic(error);
-      options = parsed.options;
-      const configured = new Set(parsed.fileNames.map((path) => resolve(path)));
-      selected = selected.filter((path) => configured.has(path));
-      if (parsed.projectReferences?.length) {
-        diagnostics.push({
-          code: 'project-references',
-          message: 'Project references require separate scans; referenced projects are not built.',
-          location: null,
-        });
-      }
-      if (config.config.extends) {
-        diagnostics.push({
-          code: 'inherited-config',
-          message:
-            'Inherited compiler configuration is resolved, but its files are not fingerprinted in this snapshot.',
-          location: null,
-        });
-      }
-    }
-  }
-
-  // The compiler may resolve dependencies, but only discovered project sources enter the inventory.
-  options = { ...options, noEmit: true, allowJs: true, checkJs: false, skipLibCheck: true, types: options.types ?? [] };
-  const program = ts.createProgram(selected, options);
-  const checker = program.getTypeChecker();
-  const discoveredSet = new Set(discovered);
-  const sources = program
-    .getSourceFiles()
-    .filter((source) => discoveredSet.has(source.fileName) && !source.isDeclarationFile);
-  sources.sort((a, b) => compare(a.fileName, b.fileName));
-  const sourceSet = new Set(sources.map((source) => source.fileName));
+  const configPath = projects.entries[0];
   const symbols: CodeSymbol[] = [];
-  const byNode = new Map<ts.Node, CodeSymbol>();
-  const bySymbol = new Map<ts.Symbol, CodeSymbol>();
+  const eligible = new Set(
+    discovered.filter((path) => !rules.excluded(portablePath(root, path)) && !/\.d\.[cm]?ts$/.test(path)),
+  );
+  const analyzed = new Set<string>();
   const inventory: Inventory = {
     schemaVersion: 1,
     analyzer: { name: 'code-inventory', version: '0.1.0', compilerVersion: ts.version },
@@ -75,13 +37,20 @@ export function scan(rootDirectory: string): Inventory {
     config: {
       path: configPath ? portablePath(root, configPath) : null,
       hash: configPath ? hashFile(configPath) : null,
+      entries: projects.entries.map((path) => portablePath(root, path)),
+      projects: projects.ordered.flatMap((project) => (project.path ? [portablePath(root, project.path)] : [])),
+      inputs: projects.inputs,
     },
     completeness: 'complete',
     files: discovered.map((path) => ({
       path: portablePath(root, path),
       hash: hashFile(path),
-      status: sourceSet.has(path) ? 'analyzed' : 'excluded',
-      reason: sourceSet.has(path) ? null : /\.d\.[cm]?ts$/.test(path) ? 'declaration-file' : 'project-config',
+      status: 'excluded',
+      reason: rules.excluded(portablePath(root, path))
+        ? 'scan-exclude'
+        : /\.d\.[cm]?ts$/.test(path)
+          ? 'declaration-file'
+          : 'project-config',
     })),
     symbols,
     references: [],
@@ -91,15 +60,21 @@ export function scan(rootDirectory: string): Inventory {
     limitations,
   };
 
-  for (const source of sources) collectDeclarations(source, null);
-  for (const source of sources) collectExports(source);
-  for (const source of sources) visit(source, null);
-  for (const diagnostic of program.getSyntacticDiagnostics()) addCompilerDiagnostic(diagnostic);
-  for (const diagnostic of program.getOptionsDiagnostics()) addCompilerDiagnostic(diagnostic);
-  for (const diagnostic of program.getSemanticDiagnostics()) {
-    if (diagnostic.file && sourceSet.has(diagnostic.file.fileName)) addCompilerDiagnostic(diagnostic);
+  for (const diagnostic of projects.diagnostics) addCompilerDiagnostic(diagnostic);
+  for (const project of projects.ordered)
+    analyze(project, { root, owners, eligible, analyzed, rules, inventory, addCompilerDiagnostic });
+  const byId = new Map(symbols.map((symbol) => [symbol.id, symbol]));
+  for (const entry of inventory.exports) {
+    if (entry.targetId) byId.get(entry.targetId)?.exportedAs.push(entry.file + '#' + entry.name);
   }
-
+  for (const file of inventory.files) {
+    if (analyzed.has(file.path)) {
+      file.status = 'analyzed';
+      file.reason = null;
+      const owner = owners.get(resolve(root, file.path))?.path;
+      if (owner) file.project = portablePath(root, owner);
+    }
+  }
   symbols.sort((a, b) => compare(a.id, b.id));
   for (const symbol of symbols) symbol.exportedAs.sort(compare);
   inventory.references.sort(
@@ -116,19 +91,6 @@ export function scan(rootDirectory: string): Inventory {
   inventory.completeness = diagnostics.length ? 'partial' : 'complete';
   inventory.snapshotId = hash(JSON.stringify(inventory));
   return inventory;
-
-  function location(node: ts.Node): Location {
-    const source = node.getSourceFile();
-    const start = node.getStart(source);
-    const { line, character } = source.getLineAndCharacterOfPosition(start);
-    return {
-      file: portablePath(root, source.fileName),
-      start,
-      end: node.getEnd(),
-      line: line + 1,
-      column: character + 1,
-    };
-  }
 
   function addCompilerDiagnostic(diagnostic: ts.Diagnostic): void {
     let at: Location | null = null;
@@ -147,6 +109,75 @@ export function scan(rootDirectory: string): Inventory {
       message: ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n').replaceAll(root, '.'),
       location: at,
     });
+  }
+}
+
+interface AnalysisContext {
+  root: string;
+  owners: Map<string, Project>;
+  eligible: Set<string>;
+  analyzed: Set<string>;
+  rules: ReturnType<typeof fileRules>;
+  inventory: Inventory;
+  addCompilerDiagnostic(diagnostic: ts.Diagnostic): void;
+}
+
+function analyze(
+  project: Project,
+  { root, owners, eligible, analyzed, rules, inventory, addCompilerDiagnostic }: AnalysisContext,
+): void {
+  const { symbols, diagnostics } = inventory;
+  const rootNames = [...(project.path ? project.files : eligible)].filter(
+    (path) => eligible.has(path) || /\.d\.[cm]?ts$/.test(path),
+  );
+  if (!rootNames.length) return;
+  const options = {
+    ...project.options,
+    noEmit: true,
+    allowJs: true,
+    checkJs: false,
+    skipLibCheck: true,
+    types: project.options.types ?? [],
+  };
+  const host = { ...ts.createCompilerHost(options), useSourceOfProjectReferenceRedirect: () => true };
+  const program = ts.createProgram({ rootNames, options, host, projectReferences: project.references });
+  const checker = program.getTypeChecker();
+  const sources = program
+    .getSourceFiles()
+    .filter((source) => eligible.has(source.fileName))
+    .sort((a, b) => compare(a.fileName, b.fileName));
+  const sourceSet = new Set(sources.map((source) => source.fileName));
+  const constructors = new Map<string, CodeSymbol>();
+  const byNode = new Map<ts.Node, CodeSymbol>();
+  const bySymbol = new Map<ts.Symbol, CodeSymbol>();
+  const owned = sources.filter((source) => {
+    if (!owners.has(source.fileName)) owners.set(source.fileName, project);
+    return owners.get(source.fileName) === project;
+  });
+  for (const source of sources) collectDeclarations(source, null);
+  for (const source of owned) {
+    analyzed.add(portablePath(root, source.fileName));
+    collectExports(source);
+    visit(source, null);
+  }
+  for (const diagnostic of [
+    ...program.getSyntacticDiagnostics(),
+    ...program.getOptionsDiagnostics(),
+    ...program.getSemanticDiagnostics(),
+  ]) {
+    if (!diagnostic.file || owners.get(diagnostic.file.fileName) === project) addCompilerDiagnostic(diagnostic);
+  }
+  function location(node: ts.Node): Location {
+    const source = node.getSourceFile();
+    const start = node.getStart(source);
+    const { line, character } = source.getLineAndCharacterOfPosition(start);
+    return {
+      file: portablePath(root, source.fileName),
+      start,
+      end: node.getEnd(),
+      line: line + 1,
+      column: character + 1,
+    };
   }
 
   function kindOf(node: ts.Node): SymbolKind | null {
@@ -189,12 +220,14 @@ export function scan(rootDirectory: string): Inventory {
         kind,
         location: at,
         containerId,
-        scope: scopeOf(at.file),
+        scope: rules.scope(at.file),
         exportedAs: [],
       };
-      symbols.push(symbol);
+      const ownedHere = owners.get(node.getSourceFile().fileName) === project;
+      if (ownedHere) symbols.push(symbol);
+      if (kind === 'constructor' && containerId) constructors.set(containerId, symbol);
       byNode.set(node, symbol);
-      if (ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)) {
+      if (ownedHere && (ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node))) {
         diagnostics.push({
           code: 'accessor-dispatch',
           message: 'Accessor declarations are inventoried, but implicit getter/setter dispatch is not resolved.',
@@ -202,6 +235,7 @@ export function scan(rootDirectory: string): Inventory {
         });
       }
       if (
+        ownedHere &&
         (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
         ts.isVariableDeclaration(node.parent) &&
         ts.isVariableDeclarationList(node.parent.parent) &&
@@ -311,13 +345,12 @@ export function scan(rootDirectory: string): Inventory {
         }
       }
       inventory.exports.push({ file, name: exported.name, targetId: target?.id ?? null });
-      if (target) target.exportedAs.push(`${file}#${exported.name}`);
     }
   }
 
   function addReference(target: CodeSymbol, node: ts.Node, kind: ReferenceKind, callerId: string | null): void {
     const at = location(node);
-    inventory.references.push({ targetId: target.id, kind, location: at, callerId, scope: scopeOf(at.file) });
+    inventory.references.push({ targetId: target.id, kind, location: at, callerId, scope: rules.scope(at.file) });
   }
 
   function declarationName(node: ts.Node): boolean {
@@ -399,9 +432,7 @@ export function scan(rootDirectory: string): Inventory {
         if (target) {
           addReference(target, node.expression, ts.isNewExpression(node) ? 'construct' : 'call', callerId);
           if (ts.isNewExpression(node) && target.kind === 'class') {
-            const constructor = symbols.find(
-              (symbol) => symbol.kind === 'constructor' && symbol.containerId === target.id,
-            );
+            const constructor = constructors.get(target.id);
             if (constructor) addReference(constructor, node.expression, 'construct', callerId);
           }
           callTargetNode = ts.isPropertyAccessExpression(expression)
