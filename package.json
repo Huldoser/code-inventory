@@ -1,0 +1,43 @@
+{
+  "name": "code-inventory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Static symbol inventory and usage reports for JavaScript and TypeScript",
+  "engines": {
+    "node": ">=26"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "THIRD_PARTY.md"
+  ],
+  "bin": {
+    "code-inventory": "./dist/cli.js"
+  },
+  "scripts": {
+    "typecheck": "tsc6 -p tsconfig.json",
+    "build": "tsc6 -p tsconfig.build.json",
+    "test": "vitest run",
+    "format:check": "prettier --check .",
+    "lint": "eslint src test/*.test.ts",
+    "check": "npm run typecheck && npm run build && npm run lint && npm test && npm run format:check"
+  },
+  "dependencies": {
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "vitest": "5.1.0",
+    "prettier": "3.10.1",
+    "eslint": "10.15.0",
+    "typescript-eslint": "8.73.0"
+  }
+}

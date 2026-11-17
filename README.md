@@ -1,41 +1,103 @@
-# repo-template
+# code-inventory
 
-The starting point for new repositories: editor and Git settings, `CODEOWNERS`, and a CI workflow whose last job,
-`ci`, is the one check a branch ruleset requires.
+Inventory JavaScript and TypeScript declarations and find their source references without running the scanned code.
 
-The community files come from [Huldoser/.github](https://github.com/Huldoser/.github): GitHub shows its code of
-conduct, security policy, contributing rules, issue and pull request forms and sponsor links in every repository that
-has none of its own. They aren't in clones, packages or downloads.
+The library and CLI produce versioned JSON snapshots, usage queries, terminal summaries, and Markdown reports.
+This initial implementation is not published as an npm package.
 
-## Creating a repository
+## Use
+
+Run these commands from the package directory using Node 26.13.1, the version pinned for CI:
 
 ```sh
-gh repo create Huldoser/new-repo --template Huldoser/repo-template --private --clone
+npm ci --ignore-scripts --no-audit
+npm run build
+node dist/cli.js test/fixtures/basic
+node dist/cli.js test/fixtures/basic --symbol normalize
+node dist/cli.js test/fixtures/basic --format json
+node dist/cli.js test/fixtures/basic --format markdown
 ```
 
-GitHub copies only the files, so each new repository needs its settings set. On AGENVEX, in a WSL terminal,
-`agx repo apply Huldoser/new-repo` sets them and reads them back, and `agx repo check Huldoser/new-repo` only shows
-what differs. The settings are the same in every repository:
+The optional directory argument defaults to the current directory. `--output` writes to a new file and refuses to
+overwrite an existing file. `--strict` returns exit code 2 when the result contains analysis diagnostics; the report
+is still produced. Invalid arguments and filesystem errors return exit code 1.
 
-- **Merging:** squash only, with the pull request's title and description as the commit; branches can be updated
-  from the pull request and are deleted after the merge; no Projects, Wiki or Discussions.
-- **Actions:** only actions pinned to a full commit SHA run; the workflow token is read-only by default and can't
-  create or approve pull requests.
-- **Releases:** immutable once published.
-- **Dependabot:** off: no alerts, security updates or `dependabot.yml`.
-- **Sponsoring:** the sponsor button, with the links in Huldoser/.github's `FUNDING.yml`.
-- **Public repositories also:** private vulnerability reporting, secret scanning with push protection, CodeQL's
-  default setup, and two rulesets that nobody may bypass (GitHub Free has none for private repositories):
-  - the default branch: no deletion or force pushes, linear history, a squash-merged pull request and the `ci` check;
-  - `v*` tags: no deletion or moving.
+An exact symbol name is accepted only when it identifies one declaration. For ambiguous names, use the ID printed in
+the snapshot or the error message. Selected-symbol JSON includes snapshot identity, diagnostics and completeness.
 
-## After creating
+```ts
+import { scan, usages, findings, markdown } from 'code-inventory';
 
-1. Rewrite this README for the new project, with how to set it up and run its checks.
-2. Add the project's jobs to `.github/workflows/ci.yml` and list each in the `ci` job's `needs`.
-3. Pin every action to a full commit SHA with its version as a comment, and update the pins by hand when a new
-   version comes out.
-4. Add a community file only when the project needs more than the shared one, such as a `SECURITY.md` that says what
-   counts as a vulnerability. A repository's own `.github/ISSUE_TEMPLATE` folder replaces all the shared issue forms,
-   so copy the ones it still wants.
-5. Public repositories: choose a licence and add `LICENSE`.
+const inventory = scan(projectDirectory);
+const usage = usages(inventory, symbolId);
+const candidates = findings(inventory);
+const report = markdown(inventory);
+```
+
+The library API is synchronous. A scan reads source, package metadata and compiler configuration, without executing
+application modules, configuration scripts or tests. JSON output excludes source bodies and the absolute root path.
+
+## What is counted
+
+- **References:** resolved occurrences, categorized as calls, construction, reads, type references, imports,
+  re-exports, or JSX. An import/re-export alias is counted once. References include import syntax even if the binding
+  is never used; use the reference kind when interpreting totals.
+- **Direct call sites:** resolved call expressions in source. A call inside a loop remains one site.
+- **Construction sites:** `new` expressions. An explicit constructor and its class each receive a relationship;
+  summing relationships across symbols is not a count of unique source sites.
+- **Distinct callers:** containing declarations, with top-level code grouped by source module.
+- **Callbacks:** passing a function as a value is a reference, not a direct invocation of that function.
+
+Scope labels use path conventions. `test`, `tests`, `__tests__`, `__mocks__`, `fixtures`, and `.test`/`.spec` files are
+test scope. `scripts`, `tools` and `*.config.*` are tooling scope. Everything else is production scope. These labels
+are heuristics, not framework-derived configuration.
+
+## Findings and limits
+
+`findings()` separates local declarations with no discovered usage from exported declarations without local usage.
+Imports and re-export syntax alone do not count as meaningful usage for these findings. Export visibility means an
+export exists somewhere in analyzed source, not necessarily that it is in a package's public entry point.
+
+Neither finding proves that code is unused. This version does not analyze entry-point reachability, so recursion and
+mutually referring declarations can have references while remaining unreachable. It does not infer runtime execution
+counts or whether tests exercise behavior.
+
+Supported inputs include TS, TSX, JS, JSX, MTS, CTS, MJS and CJS. The root `tsconfig.json` or `jsconfig.json` supplies
+compiler options, include/exclude selection and path aliases. Imported source can still enter the program when it is
+excluded from the root file list, as with the compiler itself. Without a configuration, discovered source is scanned.
+
+Discovery does not follow symlinks or enter `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, `.nuxt` or
+`.output`. Declaration files are excluded from the inventory, though compiler resolution may read them. Discovered
+source files excluded by project configuration or declaration-file status are listed with a reason. Ignored directory
+contents and non-source files are outside the discovery scope. Separate scans are required for multiple tsconfigs.
+
+Diagnostics identify parse errors, unresolved imports/calls, computed module paths, accessors and mutable function
+bindings. Accessor declarations are listed, but implicit getter/setter dispatch is not resolved. Runtime mutation,
+reflection, framework conventions and unsupported alias patterns can hide usages. Consumers should inspect both the
+diagnostics and these limits; `complete` only means no diagnostics were generated within the supported analysis.
+
+Snapshots hash analyzed/discovered source and the root configuration, but do not fingerprint installed declarations,
+package metadata or inherited configuration. Inherited configuration receives a diagnostic. Snapshot IDs identify
+the resulting report; they are not an incremental-cache key covering every input. Symbol IDs use declaration locations
+and are only stable within an unchanged snapshot. Offsets are zero-based UTF-16; lines and columns are one-based.
+
+The adapter uses Microsoft's TypeScript 6 compatibility package, whose resolved engine is 6.0.3. Syntax or project
+settings requiring newer compiler APIs may produce incomplete results. The supported runtime is Node 26 or newer; CI uses the version in `.node-version`.
+
+## Development
+
+```sh
+npm run check
+osv-scanner scan source --offline -L package-lock.json
+```
+
+`check` type-checks source and tests, builds the library and CLI, runs ESLint and Vitest, and verifies formatting.
+The CI workflow also retains the template's actionlint and zizmor checks, and its required `ci` job depends on all checks. The tests include scanned fixtures
+that throw if executed, known counts for aliases and callbacks, shadowed names, CommonJS, JSX, overloads, path mappings,
+partial analysis, deterministic output, CLI/library agreement and refusal to overwrite existing files.
+
+Tooling follows test-inventory where relevant: Vitest, ESLint, Prettier and TypeScript. The analysis backend uses the
+compiler's symbol resolver rather than adding a second syntax parser. There is no integration with test-inventory,
+MCP server, framework plugin system or entry-point unused-code engine in this milestone.
+
+Dependency licenses are recorded in THIRD_PARTY.md. No license for this project's own code has been chosen.
