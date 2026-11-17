@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { isBuiltin } from 'node:module';
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { compare, discover, hash, hashFile, portablePath, scopeOf } from './discovery.ts';
@@ -370,7 +371,7 @@ export function scan(rootDirectory: string): Inventory {
       typeOnly,
       resolvedFile: resolved ? portablePath(root, resolved.resolvedFileName) : null,
     });
-    if (!resolved)
+    if (!resolved && !isBuiltin(specifier.text))
       diagnostics.push({
         code: 'unresolved-module',
         message: `Module could not be resolved: ${specifier.text}`,
