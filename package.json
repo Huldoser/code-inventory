@@ -2,6 +2,7 @@
   "name": "code-inventory",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Static symbol inventory and usage reports for JavaScript and TypeScript",
   "engines": {

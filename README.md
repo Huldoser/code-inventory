@@ -100,4 +100,4 @@ Tooling follows test-inventory where relevant: Vitest, ESLint, Prettier and Type
 compiler's symbol resolver rather than adding a second syntax parser. There is no integration with test-inventory,
 MCP server, framework plugin system or entry-point unused-code engine in this milestone.
 
-Dependency licenses are recorded in THIRD_PARTY.md. No license for this project's own code has been chosen.
+MIT licensed; see [LICENSE](LICENSE). Dependency licenses are recorded in [THIRD_PARTY.md](THIRD_PARTY.md).

@@ -23,4 +23,4 @@ The exception expires when those releases pass 24 hours on November 17, 2026. No
 a subsequent plain `npm ci --ignore-scripts --no-audit` succeeded with the lockfile. The offline npm database dated
 November 16, 2026 reported no issues in the final graph.
 
-This records dependency licenses only. No license for this project's own code has been selected yet.
+This records dependency licenses only. The project's own code is MIT licensed; see [LICENSE](LICENSE).
