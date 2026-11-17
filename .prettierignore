@@ -1,0 +1,4 @@
+test/fixtures/
+test/.scratch/
+node_modules/
+dist/
