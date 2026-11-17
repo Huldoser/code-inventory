@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { writeFileSync } from 'node:fs';
-import { scan, markdown, summary, usages, usageText } from './index.ts';
+import { reachability, scan, markdown, summary, usages, usageText } from './index.ts';
+
+import { reachabilityText } from './report.ts';
 
 /** Run a read-only scan; output files must be new paths to avoid overwriting user work. */
 function main(): void {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
+      entry: { type: 'string', multiple: true },
       project: { type: 'string', multiple: true },
       exclude: { type: 'string', multiple: true },
       test: { type: 'string', multiple: true },
@@ -22,18 +25,20 @@ function main(): void {
   });
   if (values.help) {
     process.stdout.write(
-      'Usage: code-inventory [directory] [--project config] [--exclude glob] [--test glob] [--tooling glob] [--production glob] [--format summary|json|markdown] [--symbol name-or-id] [--output new-file] [--strict]\n',
+      'Usage: code-inventory [directory] [--entry source-file] [--project config] [--exclude glob] [--test glob] [--tooling glob] [--production glob] [--format summary|json|markdown] [--symbol name-or-id] [--output new-file] [--strict]\n',
     );
     return;
   }
   if (positionals.length > 1) throw new Error('Provide at most one directory.');
   if (!['summary', 'json', 'markdown'].includes(values.format)) throw new Error(`Unknown format: ${values.format}`);
+  if (values.symbol && values.entry) throw new Error('Select either --entry or --symbol.');
   if (values.symbol && values.format === 'markdown') throw new Error('--symbol supports summary and json formats.');
   const inventory = scan(positionals[0] ?? '.', {
     projects: values.project ?? [],
     exclude: values.exclude ?? [],
     scopes: { test: values.test ?? [], tooling: values.tooling ?? [], production: values.production ?? [] },
   });
+  const paths = values.entry ? reachability(inventory, values.entry) : null;
   const selected = values.symbol ? usages(inventory, values.symbol) : null;
   const output =
     values.format === 'json'
@@ -46,15 +51,17 @@ function main(): void {
                 diagnostics: inventory.diagnostics,
                 usage: selected,
               }
-            : inventory,
+            : (paths ?? inventory),
           null,
           2,
         ) + '\n'
-      : selected
-        ? usageText(selected) + `Analysis: ${inventory.completeness}; ${inventory.diagnostics.length} diagnostics\n`
-        : values.format === 'markdown'
-          ? markdown(inventory)
-          : summary(inventory);
+      : paths
+        ? reachabilityText(paths, values.format === 'markdown')
+        : selected
+          ? usageText(selected) + `Analysis: ${inventory.completeness}; ${inventory.diagnostics.length} diagnostics\n`
+          : values.format === 'markdown'
+            ? markdown(inventory)
+            : summary(inventory);
   if (values.output) writeFileSync(values.output, output, { flag: 'wx' });
   else process.stdout.write(output);
   if (values.strict && inventory.completeness === 'partial') process.exitCode = 2;

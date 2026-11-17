@@ -33,6 +33,7 @@ export interface Reference {
 
 /** Module syntax is recorded even when its target cannot be resolved. */
 export interface ModuleReference {
+  callerId?: string | null;
   specifier: string;
   kind: 'import' | 'export' | 'dynamic-import' | 'require';
   location: Location;
