@@ -57,6 +57,7 @@ export interface SourceFile {
   hash: string;
   status: 'analyzed' | 'excluded';
   reason: string | null;
+  project?: string;
 }
 
 /** A portable deterministic snapshot; source text and absolute root paths are omitted. */
@@ -64,7 +65,13 @@ export interface Inventory {
   schemaVersion: 1;
   analyzer: { name: 'code-inventory'; version: '0.1.0'; compilerVersion: string };
   snapshotId: string;
-  config: { path: string | null; hash: string | null };
+  config: {
+    path: string | null;
+    hash: string | null;
+    entries?: string[];
+    projects?: string[];
+    inputs?: { path: string; hash: string }[];
+  };
   completeness: 'complete' | 'partial';
   files: SourceFile[];
   symbols: CodeSymbol[];

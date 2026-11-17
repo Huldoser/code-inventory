@@ -8,6 +8,11 @@ function main(): void {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
+      project: { type: 'string', multiple: true },
+      exclude: { type: 'string', multiple: true },
+      test: { type: 'string', multiple: true },
+      tooling: { type: 'string', multiple: true },
+      production: { type: 'string', multiple: true },
       format: { type: 'string', default: 'summary' },
       symbol: { type: 'string' },
       output: { type: 'string' },
@@ -17,14 +22,18 @@ function main(): void {
   });
   if (values.help) {
     process.stdout.write(
-      'Usage: code-inventory [directory] [--format summary|json|markdown] [--symbol name-or-id] [--output new-file] [--strict]\n',
+      'Usage: code-inventory [directory] [--project config] [--exclude glob] [--test glob] [--tooling glob] [--production glob] [--format summary|json|markdown] [--symbol name-or-id] [--output new-file] [--strict]\n',
     );
     return;
   }
   if (positionals.length > 1) throw new Error('Provide at most one directory.');
   if (!['summary', 'json', 'markdown'].includes(values.format)) throw new Error(`Unknown format: ${values.format}`);
   if (values.symbol && values.format === 'markdown') throw new Error('--symbol supports summary and json formats.');
-  const inventory = scan(positionals[0] ?? '.');
+  const inventory = scan(positionals[0] ?? '.', {
+    projects: values.project ?? [],
+    exclude: values.exclude ?? [],
+    scopes: { test: values.test ?? [], tooling: values.tooling ?? [], production: values.production ?? [] },
+  });
   const selected = values.symbol ? usages(inventory, values.symbol) : null;
   const output =
     values.format === 'json'
