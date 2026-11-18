@@ -59,8 +59,8 @@ are heuristics, not framework-derived configuration.
 Imports and re-export syntax alone do not count as meaningful usage for these findings. Export visibility means an
 export exists somewhere in analyzed source, not necessarily that it is in a package's public entry point.
 
-Neither finding proves that code is unused. This version does not analyze entry-point reachability, so recursion and
-mutually referring declarations can have references while remaining unreachable. It does not infer runtime execution
+Neither finding proves that code is unused. Recursion and mutually referring declarations can produce references
+without a path from an entry point. It does not infer runtime execution
 counts or whether tests exercise behavior.
 
 Supported inputs include TS, TSX, JS, JSX, MTS, CTS, MJS and CJS. The root `tsconfig.json` or `jsconfig.json` supplies
@@ -99,6 +99,28 @@ and are only stable within an unchanged snapshot. Offsets are zero-based UTF-16;
 The adapter uses Microsoft's TypeScript 6 compatibility package, whose resolved engine is 6.0.3. Syntax or project
 settings requiring newer compiler APIs may produce incomplete results. The supported runtime is Node 26 or newer; CI uses the version in `.node-version`.
 
+## Entry-point reachability
+
+Run a query from a source entry file, using its path relative to the scanned directory:
+
+```sh
+node dist/cli.js . --entry src/cli.ts --format markdown
+```
+
+Repeat `--entry` to combine roots, or call `reachability(inventory, ['src/cli.ts'])` on an existing snapshot.
+The graph starts at module top level and follows direct calls, construction and resolved source module edges.
+Static imports and re-exports can bring in top-level code. A literal dynamic import or require inside a function
+adds a path through that function. Explicit type-only module edges are skipped. Source syntax can include imports
+that a compiler later elides.
+
+JSON lists functions, classes, constructors and methods as `reachable` or `no-known-path`. Each reached node
+has one shortest-path predecessor with an edge kind and source location. Follow predecessors to a selected entry
+to explain a result. A recursive pair with no incoming path stays outside the reached set.
+
+Conditions are treated as possible branches. External consumers, callback invocation, reflection, class
+initialization and framework dispatch can add paths beyond this model. The report includes scan diagnostics.
+A declaration with no known path requires review before removal.
+
 ## Development
 
 ```sh
@@ -113,6 +135,6 @@ partial analysis, deterministic output, CLI/library agreement and refusal to ove
 
 Tooling follows test-inventory where relevant: Vitest, ESLint, Prettier and TypeScript. The analysis backend uses the
 compiler's symbol resolver rather than adding a second syntax parser. There is no integration with test-inventory,
-MCP server, framework plugin system or entry-point unused-code engine in this milestone.
+MCP server or framework plugin system in this milestone.
 
 MIT licensed; see [LICENSE](LICENSE). Dependency licenses are recorded in [THIRD_PARTY.md](THIRD_PARTY.md).

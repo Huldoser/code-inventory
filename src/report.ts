@@ -1,3 +1,4 @@
+import type { Reachability } from './reachability.ts';
 import { findings, usages } from './query.ts';
 import type { Inventory, Usage } from './model.ts';
 
@@ -86,4 +87,42 @@ export function markdown(inventory: Inventory): string {
     ...inventory.limitations.map((limitation) => `- ${limitation}`),
     '',
   ].join('\n');
+}
+
+/** Display candidate declarations and expose each reached edge with its source location in Markdown. */
+export function reachabilityText(report: Reachability, detailed: boolean): string {
+  const missing = report.declarations.filter((symbol) => symbol.status === 'no-known-path');
+  const lines = [
+    'Entry files: ' + report.entries.join(', '),
+    report.declarations.length - missing.length + ' reachable declarations, ' + missing.length + ' with no known path',
+    'Analysis: ' + report.completeness + '; ' + report.diagnostics.length + ' diagnostics',
+  ];
+  if (detailed) {
+    lines.unshift('# Entry-point reachability', '');
+    lines.push('', '## Paths', '');
+    for (const node of report.reached) {
+      const step = node.via;
+      lines.push(
+        step
+          ? '- ' +
+              escape(step.from) +
+              ' → ' +
+              escape(node.id) +
+              ' (' +
+              step.kind +
+              ' at ' +
+              escape(step.location.file) +
+              ':' +
+              step.location.line +
+              ')'
+          : '- Entry ' + escape(node.id),
+      );
+    }
+    lines.push('', '## Declarations with no known path', '');
+  }
+  for (const symbol of missing) {
+    const line = symbol.name + ' at ' + symbol.location.file + ':' + symbol.location.line;
+    lines.push('- ' + (detailed ? escape(line) : line));
+  }
+  return [...lines, '', ...report.limitations].join('\n') + '\n';
 }

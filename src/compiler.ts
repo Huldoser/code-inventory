@@ -381,6 +381,7 @@ function analyze(
     node: ts.Node,
     specifier: ts.Expression | undefined,
     kind: 'import' | 'export' | 'dynamic-import' | 'require',
+    callerId: string | null,
     typeOnly = false,
   ): void {
     if (!specifier || !ts.isStringLiteralLike(specifier)) {
@@ -398,6 +399,7 @@ function analyze(
       ts.sys,
     ).resolvedModule;
     inventory.modules.push({
+      callerId,
       specifier: specifier.text,
       kind,
       location: location(specifier),
@@ -416,17 +418,18 @@ function analyze(
     const declaration = byNode.get(node);
     if (declaration) callerId = declaration.id;
     if (ts.isImportDeclaration(node))
-      addModule(node, node.moduleSpecifier, 'import', node.importClause?.isTypeOnly ?? false);
+      addModule(node, node.moduleSpecifier, 'import', callerId, node.importClause?.isTypeOnly ?? false);
     if (ts.isExportDeclaration(node) && node.moduleSpecifier)
-      addModule(node, node.moduleSpecifier, 'export', node.isTypeOnly);
+      addModule(node, node.moduleSpecifier, 'export', callerId, node.isTypeOnly);
     if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
-      addModule(node, node.moduleReference.expression, 'require', node.isTypeOnly);
+      addModule(node, node.moduleReference.expression, 'require', callerId, node.isTypeOnly);
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       const expression = unwrap(node.expression);
-      if (expression.kind === ts.SyntaxKind.ImportKeyword) addModule(node, node.arguments?.[0], 'dynamic-import');
+      if (expression.kind === ts.SyntaxKind.ImportKeyword)
+        addModule(node, node.arguments?.[0], 'dynamic-import', callerId);
       else if (ts.isIdentifier(expression) && expression.text === 'require' && !resolveExpression(expression)) {
-        addModule(node, node.arguments?.[0], 'require');
+        addModule(node, node.arguments?.[0], 'require', callerId);
       } else {
         const target = resolveExpression(expression);
         if (target) {
