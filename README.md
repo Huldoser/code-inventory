@@ -4,7 +4,7 @@ Find where JavaScript and TypeScript declarations are used. The CLI and library 
 
 ## Run your first scan
 
-Build from a checkout with Node.js 26 or newer. CI uses the version in [.node-version](.node-version). This package is currently distributed as source.
+Build from a checkout with Node.js 26 or newer. CI uses the version in [.node-version](.node-version).
 
 ```sh
 npm ci --ignore-scripts --no-audit

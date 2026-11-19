@@ -1,10 +1,26 @@
 {
   "name": "code-inventory",
   "version": "0.1.0",
-  "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Static symbol inventory and usage reports for JavaScript and TypeScript",
+  "description": "Static code inventory for JavaScript and TypeScript. Find symbol usages and trace paths from entry points.",
+  "homepage": "https://huldoser.github.io/code-inventory/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Huldoser/code-inventory.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Huldoser/code-inventory/issues"
+  },
+  "keywords": [
+    "javascript",
+    "typescript",
+    "static-analysis",
+    "code-inventory",
+    "code-intelligence",
+    "reachability",
+    "cli"
+  ],
   "engines": {
     "node": ">=26"
   },
