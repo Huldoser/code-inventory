@@ -48,7 +48,7 @@ const paths = reachability(inventory, ['app.ts']);
 
 ## Documentation website
 
-Open [the site home](docs/index.html) from a local checkout. The [guide](docs/guide.html) works through the fixture. The [reference](docs/reference.html) covers every CLI option, scope and project selection, snapshot fields, and analysis limits.
+Open [the site home](docs/index.html) from a local checkout. The [guide](docs/guide.html) works through the fixture and shows how to [read a partial scan of the CLI](docs/guide.html#self-scan). The [reference](docs/reference.html) covers every CLI option, scope and project selection, snapshot fields, and analysis limits.
 
 The site is static HTML and CSS with relative links. It opens directly from disk, and the [docs directory](docs/) can be served as a GitHub Pages publishing source.
 
