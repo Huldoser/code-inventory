@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reference | code-inventory</title>
+    <meta
+      name="description"
+      content="Look up command options, file selection rules, and the evidence behind each result."
+    />
+    <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="assets/site.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header>
+      <div class="wrap">
+        <a class="brand" href="index.html"><img src="assets/mark.svg" width="34" height="34" alt="" />code-inventory</a>
+        <nav aria-label="Primary">
+          <a href="guide.html">Guide</a>
+          <a href="reference.html" aria-current="page">Reference</a>
+          <a href="https://github.com/Huldoser/code-inventory">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main" class="wrap layout">
+      <aside>
+        <strong>On this page</strong>
+        <nav aria-label="On this page">
+          <a href="#cli">CLI options</a>
+          <a href="#projects">Project selection</a>
+          <a href="#counts">Counts and findings</a>
+          <a href="#snapshot">JSON snapshot</a>
+          <a href="#boundaries">Analysis limits</a>
+        </nav>
+      </aside>
+      <article>
+        <h1>Reference</h1>
+        <p class="intro">Look up command options, file selection rules, and the evidence behind each result.</p>
+        <h2 id="cli">CLI options</h2>
+        <pre><code>node dist/cli.js [directory] [options]</code></pre>
+        <p>
+          The directory defaults to the current working directory. Quote globs so the scanner receives the pattern
+          directly.
+        </p>
+        <dl>
+          <dt><code>--project config</code></dt>
+          <dd>
+            Select a config relative to the scan root and follow its transitive project references. Repeat to select
+            multiple configs.
+          </dd>
+          <dt><code>--exclude glob</code></dt>
+          <dd>Omit matching files from the inventory, including imported files. Repeat to combine patterns.</dd>
+          <dt><code>--test glob</code>, <code>--tooling glob</code>, <code>--production glob</code></dt>
+          <dd>
+            Override scope by slash-separated path relative to the root. Each is repeatable. Test takes precedence over
+            tooling, then production, then the default path conventions.
+          </dd>
+          <dt><code>--symbol name-or-id</code></dt>
+          <dd>Query one declaration by exact unique name or snapshot ID. Supports summary and JSON.</dd>
+          <dt><code>--entry source-file</code></dt>
+          <dd>
+            Trace paths from an analyzed file relative to the scan root. Repeat for multiple entries. Use a separate
+            query for <code>--symbol</code>.
+          </dd>
+          <dt><code>--format summary|json|markdown</code></dt>
+          <dd>Choose terminal text (default), machine-readable JSON, or a Markdown report.</dd>
+          <dt><code>--output new-file</code></dt>
+          <dd>Write the result to a new file. An existing path produces an error.</dd>
+          <dt><code>--strict</code></dt>
+          <dd>
+            Write the report and exit with code 2 for a partial scan. A successful scan otherwise exits with 0. Invalid
+            arguments and filesystem errors exit with 1.
+          </dd>
+          <dt><code>-h</code>, <code>--help</code></dt>
+          <dd>Print usage and exit.</dd>
+        </dl>
+        <h2 id="projects">Project selection</h2>
+        <pre><code>node dist/cli.js . --project tsconfig.build.json --exclude '**/generated/**' --test 'qa/**'</code></pre>
+        <p>
+          The scanner discovers TS, TSX, JS, JSX, MTS, CTS, MJS, and CJS files. By default it reads the root
+          <code>tsconfig.json</code>, falling back to <code>jsconfig.json</code>, then to discovered source. Configs
+          supply compiler options, root file selection, and path aliases. A solution config with an empty
+          <code>files</code> list can select a reference graph. Imported source may enter a program even when excluded
+          from the config’s root list.
+        </p>
+        <p>
+          Each file is counted once. If multiple configs explicitly include a file, the one with the shortest relative
+          path to it owns the file. Config path order breaks ties. An imported file outside every root list belongs to
+          the first importing project in config path order. The file record identifies its owner. Scan projects
+          separately when a shared file has different alias resolutions.
+        </p>
+        <p>
+          Discovery skips symlinks, declaration files as inventory inputs, and the contents of
+          <code>node_modules</code>, <code>.git</code>, <code>dist</code>, <code>build</code>, <code>coverage</code>,
+          <code>.next</code>, <code>.nuxt</code>, and <code>.output</code>. The compiler can still read declarations for
+          resolution. Discovered files excluded from the inventory carry a reason.
+        </p>
+        <p>
+          Paths containing <code>test</code>, <code>tests</code>, <code>__tests__</code>, <code>__mocks__</code>, or
+          <code>fixtures</code> as directory names, and <code>.test</code> or <code>.spec</code> files, receive test
+          scope. The scanner labels <code>scripts</code>, <code>tools</code>, and <code>*.config.*</code> as tooling.
+          Other files default to production. The equivalent library options are
+          <code>scan(root, { projects, exclude, scopes })</code>, where each scope maps to an array of globs.
+        </p>
+        <h2 id="counts">Counts and findings</h2>
+        <p>
+          <code>usages()</code> groups resolved occurrences into calls, construction, reads, type references, imports,
+          re-exports, and JSX. An import or re-export alias contributes one reference even if no code uses the binding.
+          A call inside a loop contributes one direct call site. An explicit constructor and its class each receive a
+          relationship for the same construction site. Distinct callers count the containing declarations of call and
+          construction sites, grouping top-level sites by module.
+        </p>
+        <p>
+          <code>findings()</code> separates local declarations without meaningful usage from exports without local
+          usage. Imports and re-exports alone do not count as meaningful usage. Export visibility includes exports
+          anywhere in the analyzed source. Review the package’s entry points to determine which exports it exposes.
+        </p>
+        <h2 id="snapshot">JSON snapshot</h2>
+        <dl>
+          <dt><code>schemaVersion</code>, <code>analyzer</code>, <code>snapshotId</code></dt>
+          <dd>
+            Record the format version, analyzer and compiler versions, and report identity. A symbol ID is tied to its
+            declaration location within the snapshot.
+          </dd>
+          <dt><code>config</code>, <code>files</code></dt>
+          <dd>
+            Record selected configs, project paths and config input hashes, plus file hashes, status, exclusion reasons
+            and project ownership. Resolution-only inputs such as installed declarations and package metadata fall
+            outside the fingerprint.
+          </dd>
+          <dt><code>symbols</code>, <code>references</code>, <code>modules</code>, <code>exports</code></dt>
+          <dd>
+            Describe declarations and their locations, resolved occurrences, module edges, and exported names. Source
+            bodies and the absolute root path are omitted. Locations use one-based lines and columns and zero-based
+            UTF-16 offsets with an exclusive end.
+          </dd>
+          <dt><code>completeness</code>, <code>diagnostics</code>, <code>limitations</code></dt>
+          <dd>
+            A partial result includes diagnostics. A complete result means the supported analysis emitted none. Read the
+            limits when interpreting either result.
+          </dd>
+        </dl>
+        <p>
+          A symbol query returns a <code>usage</code> object with its symbol, counts, and references alongside schema
+          version, snapshot ID, diagnostics, and completeness. An entry query returns the selected <code>entries</code>,
+          <code>reached</code> nodes with shortest-path predecessors, and <code>declarations</code> labeled
+          <code>reachable</code> or <code>no-known-path</code>, along with snapshot ID, completeness, diagnostics, and
+          limitations.
+        </p>
+        <h2 id="boundaries">Analysis limits</h2>
+        <p>
+          Scanning reads source and configuration without executing modules, tests, or configuration scripts. Parse
+          errors, unresolved imports or calls, computed module paths, accessors, and mutable function bindings can
+          produce diagnostics. Implicit getter and setter dispatch, reflection, and framework conventions can hide
+          usages. The adapter uses Microsoft’s TypeScript 6 compatibility package with compiler engine 6.0.3.
+        </p>
+        <p>
+          Reachability follows direct calls, construction, static imports and re-exports, and literal dynamic imports or
+          requires in their containing scope. It skips explicit type-only module edges. Emitted JavaScript may omit
+          other imports too. Conditional branches can contribute paths. Recursion within an isolated group creates
+          references without making it reachable from an entry. Runtime behavior, test coverage, and safe removal
+          require additional evidence.
+        </p>
+      </article>
+    </main>
+    <footer>
+      <div class="wrap">
+        code-inventory · <a href="https://github.com/Huldoser/code-inventory/blob/main/LICENSE">MIT license</a>
+      </div>
+    </footer>
+  </body>
+</html>

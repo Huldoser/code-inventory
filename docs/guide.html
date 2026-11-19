@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Your first scan | code-inventory</title>
+    <meta
+      name="description"
+      content="Build the CLI from a checkout, then use the included TypeScript fixture to investigate a declaration and trace its callers."
+    />
+    <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="assets/site.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header>
+      <div class="wrap">
+        <a class="brand" href="index.html"><img src="assets/mark.svg" width="34" height="34" alt="" />code-inventory</a>
+        <nav aria-label="Primary">
+          <a href="guide.html" aria-current="page">Guide</a>
+          <a href="reference.html">Reference</a>
+          <a href="https://github.com/Huldoser/code-inventory">GitHub</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main" class="wrap layout">
+      <aside>
+        <strong>On this page</strong>
+        <nav aria-label="On this page">
+          <a href="#build">Build from source</a>
+          <a href="#scan">Scan the fixture</a>
+          <a href="#references">Inspect a symbol</a>
+          <a href="#paths">Trace an entry point</a>
+          <a href="#library">Use the library</a>
+        </nav>
+      </aside>
+      <article>
+        <h1>Your first scan</h1>
+        <p class="intro">
+          Build the CLI from a checkout, then use the included TypeScript fixture to investigate a declaration and trace
+          its callers.
+        </p>
+        <h2 id="build">Build from source</h2>
+        <p>
+          Clone the <a href="https://github.com/Huldoser/code-inventory">code-inventory repository</a> and open its root
+          directory. The package is private in npm metadata. The examples use the compiled files in your checkout. Use
+          Node.js 26 or newer. CI pins 26.13.1.
+        </p>
+        <pre><code>npm ci --ignore-scripts --no-audit
+npm run build</code></pre>
+        <h2 id="scan">Scan the fixture</h2>
+        <p>
+          The basic fixture has a function named <code>normalize</code>, a module that re-exports it as
+          <code>clean</code>, and two files that use it. Scan the directory to see the totals across all declarations.
+        </p>
+        <pre><code>node dist/cli.js test/fixtures/basic</code></pre>
+        <pre><code>Code inventory: 4 analyzed files, 10 symbols
+16 references, 7 direct call sites
+2 symbols with no references found
+2 exports without local usage
+Analysis: complete; 0 diagnostics
+Static evidence only; no-reference findings are not proof of dead code.</code></pre>
+        <p>
+          To review individual records or share a report, select an output format. Each output path must be new. The CLI
+          writes to standard output when you omit <code>--output</code>.
+        </p>
+        <pre><code>node dist/cli.js test/fixtures/basic --format json --output inventory.json
+node dist/cli.js test/fixtures/basic --format markdown --output inventory.md</code></pre>
+        <h2 id="references">Inspect a symbol</h2>
+        <pre><code>node dist/cli.js test/fixtures/basic --symbol normalize</code></pre>
+        <p>
+          The report starts with the declaration ID and counts. Each subsequent reference names its file, line, column,
+          kind, and scope.
+        </p>
+        <pre><code>normalize (definitions.ts:0:function)
+9 references; 4 direct call sites; 3 distinct callers</code></pre>
+        <p>
+          In <code>app.ts</code>, <code>clean(' first ')</code> on line 6 and <code>alias(' second ')</code> on line 8
+          both resolve to <code>normalize</code>. Passing <code>clean</code> to <code>.map()</code> on line 9
+          contributes a read. The scanner cannot infer how often the callback runs. When several declarations share a
+          name, use an exact ID from the snapshot or ambiguity error.
+        </p>
+        <h2 id="paths">Trace an entry point</h2>
+        <pre><code>node dist/cli.js test/fixtures/basic --entry app.ts --format markdown</code></pre>
+        <p>
+          The scan finds four reachable declarations and five with no known path from <code>app.ts</code>. The
+          production entry calls <code>main()</code>, which calls <code>normalize</code> through its alias. The separate
+          test function also references <code>normalize</code>, but has no incoming path from the selected entry. Repeat
+          <code>--entry</code> to combine roots.
+        </p>
+        <p>
+          In JSON, start at a reached node and follow <code>via.from</code> until you reach an entry. Each step gives
+          the edge kind and its location. Consider other entry points, callbacks, framework dispatch, and external
+          consumers before removing a declaration.
+        </p>
+        <h2 id="library">Use the library</h2>
+        <p>From the repository root, run the same queries against one in-memory snapshot. All calls are synchronous.</p>
+        <p>
+          Save this example as <code>inspect.mjs</code> in the repository root and run <code>node inspect.mjs</code>.
+        </p>
+        <pre><code>import { scan, usages, reachability, findings, markdown } from './dist/index.js';
+
+const inventory = scan('test/fixtures/basic');
+console.log(usages(inventory, 'normalize').counts);
+console.log(reachability(inventory, ['app.ts']).declarations);
+console.log(findings(inventory));
+console.log(markdown(inventory));</code></pre>
+        <p>
+          See the <a href="reference.html#projects">project selection rules</a> before scanning a workspace with several
+          TypeScript configs.
+        </p>
+      </article>
+    </main>
+    <footer>
+      <div class="wrap">
+        code-inventory · <a href="https://github.com/Huldoser/code-inventory/blob/main/LICENSE">MIT license</a>
+      </div>
+    </footer>
+  </body>
+</html>

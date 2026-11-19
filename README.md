@@ -1,125 +1,56 @@
-# code-inventory
+# <img src="docs/assets/mark.svg" alt="" width="40" height="40"> code-inventory
 
-Inventory JavaScript and TypeScript declarations and find their source references without running the scanned code.
+Find where JavaScript and TypeScript declarations are used. The CLI and library resolve references through imports and aliases, distinguish direct calls from other reads, and trace paths from source entry points. Scanning reads the project without running its code.
 
-The library and CLI produce versioned JSON snapshots, usage queries, terminal summaries, and Markdown reports.
-This initial implementation is not published as an npm package.
+## Run your first scan
 
-## Use
-
-Run these commands from the package directory using Node 26.13.1, the version pinned for CI:
+Build from a checkout with Node.js 26 or newer. CI uses the version in [.node-version](.node-version). This package is currently distributed as source.
 
 ```sh
 npm ci --ignore-scripts --no-audit
 npm run build
-node dist/cli.js test/fixtures/basic
 node dist/cli.js test/fixtures/basic --symbol normalize
-node dist/cli.js test/fixtures/basic --format json
-node dist/cli.js test/fixtures/basic --format markdown
-node dist/cli.js . --project tsconfig.build.json --exclude '**/generated/**' --test 'qa/**'
 ```
 
-The optional directory argument defaults to the current directory. `--output` writes to a new file and refuses to
-overwrite an existing file. `--strict` returns exit code 2 when the result contains analysis diagnostics; the report
-is still produced. Invalid arguments and filesystem errors return exit code 1.
+The [fixture](test/fixtures/basic/app.ts) calls `normalize` through the imported name `clean`, assigns it to another variable, and passes it to an array callback. The first two lines of the result are:
 
-An exact symbol name is accepted only when it identifies one declaration. For ambiguous names, use the ID printed in
-the snapshot or the error message. Selected-symbol JSON includes snapshot identity, diagnostics and completeness.
-
-```ts
-import { scan, usages, findings, markdown } from 'code-inventory';
-
-const inventory = scan(projectDirectory);
-const usage = usages(inventory, symbolId);
-const candidates = findings(inventory);
-const report = markdown(inventory);
+```text
+normalize (definitions.ts:0:function)
+9 references; 4 direct call sites; 3 distinct callers
 ```
 
-The library API is synchronous. A scan reads source, package metadata and compiler configuration, without executing
-application modules, configuration scripts or tests. JSON output excludes source bodies and the absolute root path.
+The lines that follow identify each reference by file, line, column, kind, and scope. The callback argument on line 9 appears as a read. For a name shared by multiple declarations, query one of the IDs in the ambiguity message.
 
-## What is counted
+## Choose a report
 
-- **References:** resolved occurrences, categorized as calls, construction, reads, type references, imports,
-  re-exports, or JSX. An import/re-export alias is counted once. References include import syntax even if the binding
-  is never used; use the reference kind when interpreting totals.
-- **Direct call sites:** resolved call expressions in source. A call inside a loop remains one site.
-- **Construction sites:** `new` expressions. An explicit constructor and its class each receive a relationship;
-  summing relationships across symbols is not a count of unique source sites.
-- **Distinct callers:** containing declarations, with top-level code grouped by source module.
-- **Callbacks:** passing a function as a value is a reference, not a direct invocation of that function.
+| Question                              | Command from the repository root                                             |
+| ------------------------------------- | ---------------------------------------------------------------------------- |
+| What declarations are in the fixture? | `node dist/cli.js test/fixtures/basic`                                       |
+| What can the application entry reach? | `node dist/cli.js test/fixtures/basic --entry app.ts --format markdown`      |
+| How do I save the full snapshot?      | `node dist/cli.js test/fixtures/basic --format json --output inventory.json` |
+| How do I scan one TypeScript project? | `node dist/cli.js . --project tsconfig.build.json`                           |
 
-Scope labels use path conventions. `test`, `tests`, `__tests__`, `__mocks__`, `fixtures`, and `.test`/`.spec` files are
-test scope. `scripts`, `tools` and `*.config.*` are tooling scope. Everything else is production scope. These labels
-are heuristics, not framework-derived configuration.
+Repeat `--entry` to combine entry points or `--project` to select multiple configs. Output files must be new. Use `--strict` when a partial result should set exit code 2. The CLI still produces the report.
 
-## Findings and limits
+Check diagnostics before interpreting counts. Call sites measure source occurrences. Runtime dispatch, callbacks, and external consumers can introduce paths the scanner cannot see. Review declarations with no known path before considering removal.
 
-`findings()` separates local declarations with no discovered usage from exported declarations without local usage.
-Imports and re-export syntax alone do not count as meaningful usage for these findings. Export visibility means an
-export exists somewhere in analyzed source, not necessarily that it is in a package's public entry point.
+## Use the library
 
-Neither finding proves that code is unused. Recursion and mutually referring declarations can produce references
-without a path from an entry point. It does not infer runtime execution
-counts or whether tests exercise behavior.
+From an ES module in the repository root:
 
-Supported inputs include TS, TSX, JS, JSX, MTS, CTS, MJS and CJS. The root `tsconfig.json` or `jsconfig.json` supplies
-compiler options, include/exclude selection and path aliases. Imported source can still enter the program when it is
-excluded from the root file list, as with the compiler itself. Without a configuration, discovered source is scanned.
+```js
+import { scan, usages, reachability } from './dist/index.js';
 
-Discovery does not follow symlinks or enter `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, `.nuxt` or
-`.output`. Declaration files are excluded from the inventory, though compiler resolution may read them. Discovered
-source files excluded by project configuration or declaration-file status are listed with a reason. Ignored directory
-contents and non-source files are outside the discovery scope. Use repeated `--project` arguments to select config files relative to the scan root. Each selected
-config and its transitive project references use their own compiler options. A solution config with an empty
-`files` list can select an entire reference graph.
-
-Each analyzed file contributes its declarations and usages once. When multiple configs explicitly include a file,
-the config with the shortest relative path to that file owns it. Config path order breaks ties. Imported files
-outside all root lists use the first importing project in config path order. The file record names the owner.
-For a shared file whose aliases resolve differently between projects, scan each project separately to inspect
-the alternative interpretation.
-
-`--exclude` removes matching files from the inventory even when imported. `--test`, `--tooling` and `--production`
-override scope conventions in that order. Each accepts repeatable, quoted globs matching slash-separated paths
-relative to the scan root. The same options are available through `scan(root, { projects, exclude, scopes })`,
-where `scopes` maps each scope name to an array of globs.
-
-Diagnostics identify parse errors, unresolved imports/calls, computed module paths, accessors and mutable function
-bindings. Accessor declarations are listed, but implicit getter/setter dispatch is not resolved. Runtime mutation,
-reflection, framework conventions and unsupported alias patterns can hide usages. Consumers should inspect both the
-diagnostics and these limits; `complete` only means no diagnostics were generated within the supported analysis.
-
-Snapshots hash discovered source and the files read while parsing compiler configuration, including inherited
-configs. JSON records the selected entries, the project graph's config paths and those input hashes.
-Installed declarations and package metadata used only for source module resolution are outside this fingerprint. Snapshot IDs identify
-the resulting report; they are not an incremental-cache key covering every input. Symbol IDs use declaration locations
-and are only stable within an unchanged snapshot. Offsets are zero-based UTF-16; lines and columns are one-based.
-
-The adapter uses Microsoft's TypeScript 6 compatibility package, whose resolved engine is 6.0.3. Syntax or project
-settings requiring newer compiler APIs may produce incomplete results. The supported runtime is Node 26 or newer; CI uses the version in `.node-version`.
-
-## Entry-point reachability
-
-Run a query from a source entry file, using its path relative to the scanned directory:
-
-```sh
-node dist/cli.js . --entry src/cli.ts --format markdown
+const inventory = scan('test/fixtures/basic');
+const usage = usages(inventory, 'normalize');
+const paths = reachability(inventory, ['app.ts']);
 ```
 
-Repeat `--entry` to combine roots, or call `reachability(inventory, ['src/cli.ts'])` on an existing snapshot.
-The graph starts at module top level and follows direct calls, construction and resolved source module edges.
-Static imports and re-exports can bring in top-level code. A literal dynamic import or require inside a function
-adds a path through that function. Explicit type-only module edges are skipped. Source syntax can include imports
-that a compiler later elides.
+## Documentation website
 
-JSON lists functions, classes, constructors and methods as `reachable` or `no-known-path`. Each reached node
-has one shortest-path predecessor with an edge kind and source location. Follow predecessors to a selected entry
-to explain a result. A recursive pair with no incoming path stays outside the reached set.
+Open [the site home](docs/index.html) from a local checkout. The [guide](docs/guide.html) works through the fixture. The [reference](docs/reference.html) covers every CLI option, scope and project selection, snapshot fields, and analysis limits.
 
-Conditions are treated as possible branches. External consumers, callback invocation, reflection, class
-initialization and framework dispatch can add paths beyond this model. The report includes scan diagnostics.
-A declaration with no known path requires review before removal.
+The site is static HTML and CSS with relative links. It opens directly from disk, and the [docs directory](docs/) can be served as a GitHub Pages publishing source.
 
 ## Development
 
@@ -128,13 +59,6 @@ npm run check
 osv-scanner scan source --offline -L package-lock.json
 ```
 
-`check` type-checks source and tests, builds the library and CLI, runs ESLint and Vitest, and verifies formatting.
-The CI workflow also retains the template's actionlint and zizmor checks, and its required `ci` job depends on all checks. The tests include scanned fixtures
-that throw if executed, known counts for aliases and callbacks, shadowed names, CommonJS, JSX, overloads, path mappings,
-partial analysis, deterministic output, CLI/library agreement and refusal to overwrite existing files.
+The project check type-checks source and tests, builds the CLI and library, runs ESLint and Vitest, and checks formatting. CI also validates its workflows with actionlint and zizmor.
 
-Tooling follows test-inventory where relevant: Vitest, ESLint, Prettier and TypeScript. The analysis backend uses the
-compiler's symbol resolver rather than adding a second syntax parser. There is no integration with test-inventory,
-MCP server or framework plugin system in this milestone.
-
-MIT licensed; see [LICENSE](LICENSE). Dependency licenses are recorded in [THIRD_PARTY.md](THIRD_PARTY.md).
+[MIT license](LICENSE) · [Dependency licenses](THIRD_PARTY.md)
