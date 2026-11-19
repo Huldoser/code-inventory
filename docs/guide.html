@@ -31,6 +31,7 @@
           <a href="#scan">Scan the fixture</a>
           <a href="#references">Inspect a symbol</a>
           <a href="#paths">Trace an entry point</a>
+          <a href="#self-scan">Read a partial scan</a>
           <a href="#library">Use the library</a>
         </nav>
       </aside>
@@ -92,6 +93,27 @@ node dist/cli.js test/fixtures/basic --format markdown --output inventory.md</co
           In JSON, start at a reached node and follow <code>via.from</code> until you reach an entry. Each step gives
           the edge kind and its location. Consider other entry points, callbacks, framework dispatch, and external
           consumers before removing a declaration.
+        </p>
+        <h2 id="self-scan">Read a partial scan</h2>
+        <p>After building from source, scan the CLI itself from the repository root.</p>
+        <pre><code>node dist/cli.js . --project tsconfig.build.json --entry src/cli.ts --format markdown</code></pre>
+        <pre><code>42 reachable declarations, 63 with no known path
+Analysis: partial; 3 diagnostics</code></pre>
+        <p>
+          In the paths section, follow the call from the entry module to <code>main()</code> at
+          <code>src/cli.ts:71</code>, then from <code>main()</code> to <code>scan()</code> at
+          <code>src/cli.ts:36</code>. The line numbers point to the calls that establish each step.
+        </p>
+        <p>
+          Run the same query with <code>--format json</code> to inspect <code>diagnostics</code>. The three
+          <code>unresolved-call</code> entries point to two calls through <code>rules.excluded</code> and one through
+          <code>addCompilerDiagnostic</code>. The scanner could not tie those calls to concrete project declarations.
+          Adding <code>--strict</code> still emits the report and sets exit code 2.
+        </p>
+        <p>
+          The callback passed to <code>.map()</code> at <code>src/report.ts:49</code> appears under declarations with no
+          known path. That status describes the path the scanner could establish from this entry. The scanner does not
+          model the runtime call that <code>.map()</code> makes to the callback.
         </p>
         <h2 id="library">Use the library</h2>
         <p>From the repository root, run the same queries against one in-memory snapshot. All calls are synchronous.</p>
