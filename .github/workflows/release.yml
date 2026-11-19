@@ -1,0 +1,102 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: Use the npm environment token for the first 0.1.0 publish
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  pack:
+    name: Build, test and pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      NODE_OPTIONS: --max-old-space-size=2048
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      node-version: ${{ steps.node.outputs.node-version }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts --no-audit --fund=false
+      - run: npm run check
+      - id: pack
+        shell: bash
+        env:
+          BOOTSTRAP: ${{ inputs.bootstrap }}
+        run: |
+          jq -e '.name == "code-inventory" and .private != true' package.json >/dev/null
+          if [[ "$BOOTSTRAP" == true ]]; then
+            jq -e '.version == "0.1.0"' package.json >/dev/null
+          fi
+          package_dir="$RUNNER_TEMP/npm-release"
+          mkdir "$package_dir"
+          packed=$(npm pack --ignore-scripts --pack-destination "$package_dir" --json)
+          filename=$(jq -er '.[0].filename' <<< "$packed")
+          mv -- "$package_dir/$filename" "$package_dir/package.tgz"
+          digest=$(sha256sum "$package_dir/package.tgz")
+          printf 'sha256=%s\n' "${digest%% *}" >> "$GITHUB_OUTPUT"
+      - id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-package-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/npm-release/package.tgz
+          if-no-files-found: error
+
+  publish:
+    name: Publish the tested tarball
+    if: github.repository == 'Huldoser/code-inventory' && github.ref == 'refs/heads/main'
+    needs: pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ needs.pack.outputs.node-version }}
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org/
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.pack.outputs.artifact-id }}
+          path: ${{ runner.temp }}/npm-release
+      - name: Verify tarball checksum
+        working-directory: ${{ runner.temp }}/npm-release
+        env:
+          EXPECTED_SHA256: ${{ needs.pack.outputs.sha256 }}
+        run: printf '%s  package.tgz\n' "$EXPECTED_SHA256" | sha256sum --check --strict
+      - name: Publish first release with the environment token
+        if: inputs.bootstrap
+        working-directory: ${{ runner.temp }}/npm-release
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::Add NPM_TOKEN to the protected npm environment before the bootstrap publish."
+            exit 1
+          fi
+          npm publish ./package.tgz --access public --ignore-scripts --provenance
+      - name: Publish with npm Trusted Publishing
+        if: ${{ !inputs.bootstrap }}
+        working-directory: ${{ runner.temp }}/npm-release
+        run: npm publish ./package.tgz --access public --ignore-scripts
