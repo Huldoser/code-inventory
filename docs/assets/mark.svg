@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img">
+  <title>code-inventory</title>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="#172822" stroke="#648478"/>
+  <path d="M15 32h8c10 0 8-14 17-14h8M23 32c10 0 8 14 17 14h8" fill="none" stroke="#8ce9bd" stroke-width="5"/>
+  <rect x="10" y="26" width="12" height="12" rx="2" fill="#f0fff6"/>
+  <path d="M42 12h12v12H42zM42 40h12v12H42z" fill="#8ce9bd"/>
+</svg>
