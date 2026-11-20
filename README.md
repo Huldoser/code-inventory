@@ -39,6 +39,8 @@ The lines that follow identify each reference by file, line, column, kind, and s
 
 For convention-based entry points, use a quoted pattern such as `--entry-glob 'src/routes/**/+page.ts'`. Combine it with `--package-entries` to include a package’s public entry files.
 
+To review what an external caller can reach by invoking a handler, use `--entry-symbol GET`. If several declarations share that name, the CLI lists their snapshot IDs. File entries trace module initialization. Combining both options includes both starting points.
+
 Repeat `--entry` to combine entry points or `--project` to select multiple configs. Output files must be new. Use `--strict` when a partial result should set exit code 2. The CLI still produces the report.
 
 Check diagnostics before interpreting counts. Call sites measure source occurrences. Runtime dispatch, callbacks, and external consumers can introduce paths the scanner cannot see. Review declarations with no known path before considering removal.

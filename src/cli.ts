@@ -12,6 +12,7 @@ function main(): void {
     options: {
       'package-entries': { type: 'boolean' },
       'entry-glob': { type: 'string', multiple: true },
+      'entry-symbol': { type: 'string', multiple: true },
       entry: { type: 'string', multiple: true },
       project: { type: 'string', multiple: true },
       exclude: { type: 'string', multiple: true },
@@ -27,14 +28,14 @@ function main(): void {
   });
   if (values.help) {
     process.stdout.write(
-      'Usage: code-inventory [directory] [--entry source-file] [--entry-glob glob] [--package-entries] [--project config] [--exclude glob] [--test glob] [--tooling glob] [--production glob] [--format summary|json|markdown] [--symbol name-or-id] [--output new-file] [--strict]\n',
+      'Usage: code-inventory [directory] [--entry source-file] [--entry-glob glob] [--entry-symbol name-or-id] [--package-entries] [--project config] [--exclude glob] [--test glob] [--tooling glob] [--production glob] [--format summary|json|markdown] [--symbol name-or-id] [--output new-file] [--strict]\n',
     );
     return;
   }
   if (positionals.length > 1) throw new Error('Provide at most one directory.');
   if (!['summary', 'json', 'markdown'].includes(values.format)) throw new Error(`Unknown format: ${values.format}`);
   const directory = positionals[0] ?? '.';
-  const entryQuery = values.entry || values['entry-glob'] || values['package-entries'];
+  const entryQuery = values.entry || values['entry-glob'] || values['entry-symbol'] || values['package-entries'];
   if (values.symbol && entryQuery) throw new Error('Select either entry points or --symbol.');
   if (values.symbol && values.format === 'markdown') throw new Error('--symbol supports summary and json formats.');
   const inventory = scan(directory, {
@@ -43,7 +44,12 @@ function main(): void {
     scopes: { test: values.test ?? [], tooling: values.tooling ?? [], production: values.production ?? [] },
   });
   const entries = [...(values.entry ?? []), ...(values['package-entries'] ? packageEntries(directory, inventory) : [])];
-  const paths = entryQuery ? reachability(inventory, entries, { entryGlobs: values['entry-glob'] ?? [] }) : null;
+  const paths = entryQuery
+    ? reachability(inventory, entries, {
+        entryGlobs: values['entry-glob'] ?? [],
+        entrySymbols: values['entry-symbol'] ?? [],
+      })
+    : null;
   const selected = values.symbol ? usages(inventory, values.symbol) : null;
   const output =
     values.format === 'json'

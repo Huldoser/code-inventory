@@ -7,6 +7,43 @@ const root = resolve(import.meta.dirname, 'fixtures/reachability');
 const inventory = scan(root);
 const report = reachability(inventory, ['main.ts']);
 
+it('traces an explicitly invoked route handler independently of loading the route file', () => {
+  const directory = resolve(import.meta.dirname, 'fixtures/route');
+  const run = (...args: string[]) =>
+    spawnSync(
+      process.execPath,
+      [resolve(import.meta.dirname, '../dist/cli.js'), directory, ...args, '--format', 'json'],
+      {
+        encoding: 'utf8',
+      },
+    );
+  const file = run('--entry-glob', 'app/**/route.ts');
+  expect(JSON.parse(file.stdout).declarations.every((s: { status: string }) => s.status === 'no-known-path')).toBe(
+    true,
+  );
+  const selected = run('--entry-symbol', 'GET');
+  expect(selected.stderr).toBe('');
+  expect(selected.status).toBe(0);
+  const paths = JSON.parse(selected.stdout);
+  const inventory = scan(directory);
+  const get = usages(inventory, 'GET').symbol.id;
+  const helper = usages(inventory, 'statusText').symbol.id;
+  expect(paths.entrySymbols).toEqual([get]);
+  expect(paths.entries).toEqual([]);
+  expect(entryPath(paths, helper)).toEqual([
+    { id: get, via: null },
+    {
+      id: helper,
+      via: { from: get, kind: 'call', location: expect.objectContaining({ file: 'app/status/route.ts', line: 2 }) },
+    },
+  ]);
+  expect(entryPath(paths, usages(inventory, 'POST').symbol.id)).toBeNull();
+  expect(reachability(inventory, [], { entrySymbols: [get, 'GET'] })).toEqual(paths);
+  expect(reachability(inventory, ['app/status/route.ts'], { entrySymbols: [get] }).entries).toEqual([
+    'app/status/route.ts',
+  ]);
+});
+
 it('traces calls, constructors and module initialization without rooting declarations solely by import', () => {
   expect(inventory.diagnostics).toEqual([]);
   expect(

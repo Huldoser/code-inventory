@@ -69,6 +69,14 @@
             <code>null</code>. If a target pattern has no matching source or predicted output, select its source
             explicitly with <code>--entry</code>. External invocations of exported functions are outside this trace.
           </dd>
+          <dt><code>--entry-symbol name-or-id</code></dt>
+          <dd>
+            Assume a function, method or constructor is invoked and trace calls from its body. For example, select
+            <code>GET</code> when reviewing a route handler. A repeated name requires the snapshot ID shown in the
+            ambiguity message. Repeat the option for multiple invocations. Add file entries to include module
+            initialization. The library accepts <code>reachability(inventory, [], { entrySymbols: ['GET'] })</code>. The
+            report records these assumptions as snapshot IDs in the optional <code>entrySymbols</code> array.
+          </dd>
           <dt><code>--entry-glob glob</code></dt>
           <dd>
             Trace analyzed files matching a quoted, root-relative pattern such as <code>'src/routes/**/+page.ts'</code>.
@@ -172,8 +180,8 @@
           directory synchronously. The other queries operate on its inventory or reachability report, except
           packageEntries(directory, inventory), which also reads the matching manifest and build configuration. Pass its
           result to reachability. entryPath(report, symbolId) returns the ordered nodes of one shortest path, including
-          the module root and target, or null for an unreached ID. Select the ID with usages. Each non-root node carries
-          the edge kind and source location. summary, usageText and markdown render display text.
+          the selected file or invocation root and target, or null for an unreached ID. Select the ID with usages. Each
+          non-root node carries the edge kind and source location. summary, usageText and markdown render display text.
         </p>
         <p>
           The <a href="report-schema.json">JSON Schema</a> describes all three CLI report shapes. For persisted data

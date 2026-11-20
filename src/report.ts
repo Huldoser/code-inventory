@@ -99,7 +99,8 @@ export function markdown(inventory: Inventory): string {
 export function reachabilityText(report: Reachability, detailed: boolean): string {
   const missing = report.declarations.filter((symbol) => symbol.status === 'no-known-path');
   const lines = [
-    'Entry files: ' + report.entries.join(', '),
+    ...(report.entries.length ? ['Entry files: ' + report.entries.join(', ')] : []),
+    ...(report.entrySymbols?.length ? ['Assumed invocations: ' + report.entrySymbols.join(', ')] : []),
     report.declarations.length - missing.length + ' reachable declarations, ' + missing.length + ' with no known path',
     'Analysis: ' + report.completeness + '; ' + report.diagnostics.length + ' diagnostics',
   ];

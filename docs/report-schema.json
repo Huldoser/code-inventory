@@ -442,6 +442,10 @@
             "type": "string"
           }
         },
+        "entrySymbols": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "reached": {
           "type": "array",
           "items": {

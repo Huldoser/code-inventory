@@ -1,7 +1,7 @@
-import type { Finding, Inventory, Usage } from './model.ts';
+import type { CodeSymbol, Finding, Inventory, Usage } from './model.ts';
 
 /** Select by exact snapshot ID or by unambiguous declaration name. */
-export function usages(inventory: Inventory, selector: string): Usage {
+export function selectSymbol(inventory: Inventory, selector: string): CodeSymbol {
   const matches = inventory.symbols.filter((symbol) => symbol.id === selector || symbol.name === selector);
   if (matches.length !== 1) {
     throw new Error(
@@ -10,7 +10,11 @@ export function usages(inventory: Inventory, selector: string): Usage {
         : `Ambiguous symbol ${selector}; use one of these IDs:\n${matches.map((symbol) => symbol.id).join('\n')}`,
     );
   }
-  const symbol = matches[0]!;
+  return matches[0]!;
+}
+
+export function usages(inventory: Inventory, selector: string): Usage {
+  const symbol = selectSymbol(inventory, selector);
   const references = inventory.references.filter((reference) => reference.targetId === symbol.id);
   const calls = references.filter((reference) => reference.kind === 'call' || reference.kind === 'construct');
   return {
