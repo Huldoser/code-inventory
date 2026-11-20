@@ -12,5 +12,6 @@ export type {
   Location,
 } from './model.ts';
 export type { ScanOptions } from './projects.ts';
-export { reachability } from './reachability.ts';
+export { entryPath, reachability } from './reachability.ts';
 export type { Reachability } from './reachability.ts';
+export { packageEntries } from './package-entries.ts';

@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "exports": {
+    ".": { "types": "./types.d.ts", "default": "./main.ts" },
+    "./other": "./build/alternate.js"
+  },
+  "main": "./ignored.ts",
+  "bin": { "example": "./main.ts" }
+}

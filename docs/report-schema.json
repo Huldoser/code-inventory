@@ -1,0 +1,509 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "code-inventory snapshot and query reports",
+  "oneOf": [
+    {
+      "$ref": "#/definitions/inventory"
+    },
+    {
+      "$ref": "#/definitions/symbolReport"
+    },
+    {
+      "$ref": "#/definitions/entryReport"
+    }
+  ],
+  "definitions": {
+    "location": {
+      "type": "object",
+      "required": ["file", "start", "end", "line", "column"],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "symbol": {
+      "type": "object",
+      "required": ["id", "name", "kind", "location", "containerId", "scope", "exportedAs"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["class", "constructor", "function", "method", "enum", "type", "interface"]
+        },
+        "location": {
+          "$ref": "#/definitions/location"
+        },
+        "containerId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "enum": ["production", "test", "tooling"]
+        },
+        "exportedAs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "required": ["targetId", "kind", "location", "callerId", "scope"],
+      "properties": {
+        "targetId": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["call", "construct", "read", "type", "import", "reexport", "jsx"]
+        },
+        "location": {
+          "$ref": "#/definitions/location"
+        },
+        "callerId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "enum": ["production", "test", "tooling"]
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "required": ["code", "message", "location"],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/location"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "snapshotId",
+        "completeness",
+        "diagnostics",
+        "analyzer",
+        "config",
+        "files",
+        "symbols",
+        "references",
+        "modules",
+        "exports",
+        "limitations"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "snapshotId": {
+          "type": "string"
+        },
+        "completeness": {
+          "enum": ["complete", "partial"]
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/diagnostic"
+          }
+        },
+        "analyzer": {
+          "type": "object",
+          "required": ["name", "version", "compilerVersion"],
+          "properties": {
+            "name": {
+              "const": "code-inventory"
+            },
+            "version": {
+              "type": "string"
+            },
+            "compilerVersion": {
+              "type": "string"
+            }
+          }
+        },
+        "config": {
+          "type": "object",
+          "required": ["path", "hash"],
+          "properties": {
+            "path": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "hash": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "projects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "inputs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["path", "hash"],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "hash": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "hash", "status", "reason"],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "hash": {
+                "type": "string"
+              },
+              "status": {
+                "enum": ["excluded", "analyzed"]
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "project": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/symbol"
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/reference"
+          }
+        },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["specifier", "kind", "location", "typeOnly", "resolvedFile"],
+            "properties": {
+              "callerId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "specifier": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": ["import", "export", "dynamic-import", "require"]
+              },
+              "location": {
+                "$ref": "#/definitions/location"
+              },
+              "typeOnly": {
+                "type": "boolean"
+              },
+              "resolvedFile": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "exports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["file", "name", "targetId"],
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "targetId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "symbolReport": {
+      "type": "object",
+      "required": ["schemaVersion", "snapshotId", "completeness", "diagnostics", "usage"],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "snapshotId": {
+          "type": "string"
+        },
+        "completeness": {
+          "enum": ["complete", "partial"]
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/diagnostic"
+          }
+        },
+        "usage": {
+          "type": "object",
+          "required": ["symbol", "references", "counts"],
+          "properties": {
+            "symbol": {
+              "$ref": "#/definitions/symbol"
+            },
+            "references": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/reference"
+              }
+            },
+            "counts": {
+              "type": "object",
+              "required": [
+                "references",
+                "directCallSites",
+                "constructorSites",
+                "distinctCallers",
+                "production",
+                "test",
+                "tooling"
+              ],
+              "properties": {
+                "references": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "directCallSites": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "constructorSites": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "distinctCallers": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "production": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "test": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "tooling": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "entryReport": {
+      "type": "object",
+      "required": ["snapshotId", "completeness", "diagnostics", "entries", "reached", "declarations", "limitations"],
+      "properties": {
+        "snapshotId": {
+          "type": "string"
+        },
+        "completeness": {
+          "enum": ["complete", "partial"]
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/diagnostic"
+          }
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reached": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "via"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "via": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "required": ["from", "kind", "location"],
+                    "properties": {
+                      "from": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": ["import", "export", "dynamic-import", "require", "call", "construct"]
+                      },
+                      "location": {
+                        "$ref": "#/definitions/location"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "declarations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "location", "status"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "location": {
+                "$ref": "#/definitions/location"
+              },
+              "status": {
+                "enum": ["reachable", "no-known-path"]
+              }
+            }
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

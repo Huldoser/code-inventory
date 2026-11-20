@@ -58,6 +58,14 @@
           </dd>
           <dt><code>--symbol name-or-id</code></dt>
           <dd>Query one declaration by exact unique name or snapshot ID. Supports summary and JSON.</dd>
+          <dt><code>--package-entries</code></dt>
+          <dd>
+            Trace module initialization from the root package's explicit exports (or main) and bin targets. All runtime
+            conditions and array alternatives contribute roots. Type-only branches, declaration files and JSON targets
+            are skipped. Combine with --entry for framework or implicit roots. For compiled packages select the emitting
+            --project so the compiler can map outputs to analyzed inputs. Wildcards and unmapped outputs require
+            explicit source entries instead. External invocations of exported functions are outside this trace.
+          </dd>
           <dt><code>--entry source-file</code></dt>
           <dd>
             Trace paths from an analyzed file relative to the scan root. Repeat for multiple entries. Use a separate
@@ -147,6 +155,30 @@
           <code>reached</code> nodes with shortest-path predecessors, and <code>declarations</code> labeled
           <code>reachable</code> or <code>no-known-path</code>, along with snapshot ID, completeness, diagnostics, and
           limitations.
+        </p>
+        <h2>Consuming the 0.x API</h2>
+        <p>
+          The package root exports scan, usages, findings, reachability, packageEntries and entryPath. scan reads a
+          directory synchronously. The other queries operate on its inventory or reachability report, except
+          packageEntries(directory, inventory), which also reads the matching manifest and build configuration. Pass its
+          result to reachability. entryPath(report, symbolId) returns the ordered nodes of one shortest path, including
+          the module root and target, or null for an unreached ID. Select the ID with usages. Each non-root node carries
+          the edge kind and source location. summary, usageText and markdown render display text.
+        </p>
+        <p>
+          The <a href="report-schema.json">JSON Schema</a> describes all three CLI report shapes. For persisted data
+          check schemaVersion before reading a full inventory or symbol response. The entry response has the
+          Reachability shape in the shipped TypeScript declarations. In 0.1.0 it has no schemaVersion. Keep analyzer and
+          compiler versions from the full snapshot alongside query results. Use snapshot-local IDs for joins. Accept
+          additional fields and unknown diagnostic codes. Compare counts across upgrades against source examples;
+          changes in resolution can change a result even when its shape stays compatible. Keep the generating version
+          for older snapshots. During 0.x the format and API can change.
+        </p>
+        <p>
+          TS-prefixed codes are compiler diagnostics. unresolved-module and dynamic-module identify missing module
+          edges. unresolved-call, mutable-binding and accessor-dispatch identify uncertainty about invocation targets.
+          Inspect the diagnostic location alongside the usage or path. Scope is snapshot-wide, so a partial scan can
+          still contain individually verifiable calls. The inventory summary groups diagnostics by code.
         </p>
         <h2 id="boundaries">Analysis limits</h2>
         <p>
