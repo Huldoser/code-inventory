@@ -64,7 +64,7 @@ export interface SourceFile {
 /** A portable deterministic snapshot; source text and absolute root paths are omitted. */
 export interface Inventory {
   schemaVersion: 1;
-  analyzer: { name: 'code-inventory'; version: '0.1.0'; compilerVersion: string };
+  analyzer: { name: 'code-inventory'; version: string; compilerVersion: string };
   snapshotId: string;
   config: {
     path: string | null;
