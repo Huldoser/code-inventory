@@ -85,7 +85,7 @@ jobs:
         env:
           EXPECTED_SHA256: ${{ needs.pack.outputs.sha256 }}
         run: printf '%s  package.tgz\n' "$EXPECTED_SHA256" | sha256sum --check --strict
-      - name: Publish first release with the environment token
+      - name: Stage first release for npm approval
         if: inputs.bootstrap
         working-directory: ${{ runner.temp }}/npm-release
         env:
@@ -95,7 +95,7 @@ jobs:
             echo "::error::Add NPM_TOKEN to the protected npm environment before the bootstrap publish."
             exit 1
           fi
-          npm publish ./package.tgz --access public --ignore-scripts --provenance
+          npm stage publish ./package.tgz --access public --ignore-scripts --provenance
       - name: Publish with npm Trusted Publishing
         if: ${{ !inputs.bootstrap }}
         working-directory: ${{ runner.temp }}/npm-release
