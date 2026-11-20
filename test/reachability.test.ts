@@ -77,3 +77,30 @@ it('uses package exports and bins as roots and reconstructs a shortest declarati
   ]);
   expect(entryPath(report, usages(inventory, 'left').symbol.id)).toBeNull();
 });
+
+it('expands package patterns against source and compiler outputs, honoring private and remapped subpaths', () => {
+  const dir = resolve(import.meta.dirname, 'fixtures/export-patterns');
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolve(import.meta.dirname, '../dist/cli.js'),
+      dir,
+      '--project',
+      'tsconfig.json',
+      '--project',
+      'jsconfig.json',
+      '--package-entries',
+      '--format',
+      'json',
+    ],
+    { encoding: 'utf8' },
+  );
+  expect(result.stderr).toBe('');
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout).entries).toEqual([
+    'src/group/public.ts',
+    'src/nested/open.ts',
+    'src/visible.ts',
+    'variants/red/red.cjs',
+  ]);
+});

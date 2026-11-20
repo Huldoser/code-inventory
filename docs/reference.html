@@ -60,11 +60,14 @@
           <dd>Query one declaration by exact unique name or snapshot ID. Supports summary and JSON.</dd>
           <dt><code>--package-entries</code></dt>
           <dd>
-            Trace module initialization from the root package's explicit exports (or main) and bin targets. All runtime
+            Trace module initialization from the root package's exports (or main) and bin targets. All runtime
             conditions and array alternatives contribute roots. Type-only branches, declaration files and JSON targets
             are skipped. Combine with --entry for framework or implicit roots. For compiled packages select the emitting
-            --project so the compiler can map outputs to analyzed inputs. Wildcards and unmapped outputs require
-            explicit source entries instead. External invocations of exported functions are outside this trace.
+            --project so the compiler can map outputs to analyzed inputs. Subpath patterns such as
+            <code>"./features/*": "./dist/*.js"</code> expand against analyzed files and their predicted JavaScript
+            outputs. An exact subpath or a more specific pattern takes precedence, including private paths blocked with
+            <code>null</code>. If a target pattern has no matching source or predicted output, select its source
+            explicitly with <code>--entry</code>. External invocations of exported functions are outside this trace.
           </dd>
           <dt><code>--entry source-file</code></dt>
           <dd>
