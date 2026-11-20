@@ -20,11 +20,22 @@ export interface Reachability {
 
 const moduleId = (file: string) => 'module:' + file;
 
-/** Trace resolved direct calls, construction and literal module edges from explicit source files. */
-export function reachability(inventory: Inventory, files: readonly string[]): Reachability {
-  const entries = [...new Set(files.map((file) => posix.normalize(file)))].sort();
-  if (!entries.length) throw new Error('Select at least one entry file.');
+/** Trace resolved direct calls, construction and literal module edges from selected source files. */
+export function reachability(
+  inventory: Inventory,
+  files: readonly string[],
+  options: { entryGlobs?: readonly string[] } = {},
+): Reachability {
+  const selected = new Set(files.map((file) => posix.normalize(file)));
   const analyzed = new Set(inventory.files.filter((file) => file.status === 'analyzed').map((file) => file.path));
+  for (const glob of options.entryGlobs ?? []) {
+    const pattern = glob.replace(/^\.\//, '');
+    const matches = [...analyzed].filter((file) => posix.matchesGlob(file, pattern));
+    if (!matches.length) throw new Error('No analyzed entry files match: ' + glob);
+    for (const file of matches) selected.add(file);
+  }
+  const entries = [...selected].sort();
+  if (!entries.length) throw new Error('Select at least one entry file.');
   for (const file of entries) {
     if (!analyzed.has(file)) throw new Error('Entry file was not analyzed: ' + file);
   }

@@ -37,6 +37,8 @@ The lines that follow identify each reference by file, line, column, kind, and s
 | How do I save the full snapshot?      | `node dist/cli.js test/fixtures/basic --format json --output inventory.json` |
 | How do I scan one TypeScript project? | `node dist/cli.js . --project tsconfig.build.json`                           |
 
+For convention-based entry points, use a quoted pattern such as `--entry-glob 'src/routes/**/+page.ts'`. Combine it with `--package-entries` to include a package’s public entry files.
+
 Repeat `--entry` to combine entry points or `--project` to select multiple configs. Output files must be new. Use `--strict` when a partial result should set exit code 2. The CLI still produces the report.
 
 Check diagnostics before interpreting counts. Call sites measure source occurrences. Runtime dispatch, callbacks, and external consumers can introduce paths the scanner cannot see. Review declarations with no known path before considering removal.

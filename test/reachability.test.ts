@@ -104,3 +104,25 @@ it('expands package patterns against source and compiler outputs, honoring priva
     'variants/red/red.cjs',
   ]);
 });
+
+it('combines entry globs with explicit and package roots and rejects a glob matching only excluded files', () => {
+  const run = (...args: string[]) =>
+    spawnSync(process.execPath, [resolve(import.meta.dirname, '../dist/cli.js'), root, ...args], { encoding: 'utf8' });
+  const selected = run(
+    '--entry-glob',
+    './{init,main}.ts',
+    '--entry',
+    'init.ts',
+    '--entry-glob',
+    'alt*.ts',
+    '--package-entries',
+    '--format',
+    'json',
+  );
+  expect(selected.status).toBe(0);
+  expect(JSON.parse(selected.stdout)).toEqual(reachability(inventory, ['alternate.ts', 'main.ts', 'init.ts']));
+  const excluded = run('--entry', 'main.ts', '--entry-glob', 'late*.ts', '--exclude', 'late.ts');
+  expect(excluded.status).toBe(1);
+  expect(excluded.stderr).toContain('No analyzed entry files match: late*.ts');
+  expect(run('--entry-glob', '*.ts', '--symbol', 'leaf').status).toBe(1);
+});

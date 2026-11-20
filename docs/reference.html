@@ -69,6 +69,13 @@
             <code>null</code>. If a target pattern has no matching source or predicted output, select its source
             explicitly with <code>--entry</code>. External invocations of exported functions are outside this trace.
           </dd>
+          <dt><code>--entry-glob glob</code></dt>
+          <dd>
+            Trace analyzed files matching a quoted, root-relative pattern such as <code>'src/routes/**/+page.ts'</code>.
+            Repeat the option or combine it with --entry and --package-entries. Each pattern must match an analyzed
+            file. Library callers can pass
+            <code>reachability(inventory, [], { entryGlobs: ['src/routes/**/+page.ts'] })</code>.
+          </dd>
           <dt><code>--entry source-file</code></dt>
           <dd>
             Trace paths from an analyzed file relative to the scan root. Repeat for multiple entries. Use a separate
