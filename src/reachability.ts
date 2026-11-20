@@ -96,3 +96,18 @@ export function reachability(inventory: Inventory, files: readonly string[]): Re
     ],
   };
 }
+
+/** Return one shortest path in entry-to-target order, or null for an unreached ID. */
+export function entryPath(report: Reachability, id: string): Reachability['reached'] | null {
+  const nodes = new Map(report.reached.map((node) => [node.id, node]));
+  let node = nodes.get(id);
+  if (!node) return null;
+  const path = [node];
+  while (node.via) {
+    const parent = nodes.get(node.via.from);
+    if (!parent || path.length >= nodes.size) throw new Error('Invalid reachability predecessor chain.');
+    path.push(parent);
+    node = parent;
+  }
+  return path.reverse();
+}

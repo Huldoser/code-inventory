@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { writeFileSync } from 'node:fs';
-import { reachability, scan, markdown, summary, usages, usageText } from './index.ts';
+import { packageEntries, reachability, scan, markdown, summary, usages, usageText } from './index.ts';
 
 import { reachabilityText } from './report.ts';
 
@@ -10,6 +10,7 @@ function main(): void {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
+      'package-entries': { type: 'boolean' },
       entry: { type: 'string', multiple: true },
       project: { type: 'string', multiple: true },
       exclude: { type: 'string', multiple: true },
@@ -25,20 +26,23 @@ function main(): void {
   });
   if (values.help) {
     process.stdout.write(
-      'Usage: code-inventory [directory] [--entry source-file] [--project config] [--exclude glob] [--test glob] [--tooling glob] [--production glob] [--format summary|json|markdown] [--symbol name-or-id] [--output new-file] [--strict]\n',
+      'Usage: code-inventory [directory] [--entry source-file] [--package-entries] [--project config] [--exclude glob] [--test glob] [--tooling glob] [--production glob] [--format summary|json|markdown] [--symbol name-or-id] [--output new-file] [--strict]\n',
     );
     return;
   }
   if (positionals.length > 1) throw new Error('Provide at most one directory.');
   if (!['summary', 'json', 'markdown'].includes(values.format)) throw new Error(`Unknown format: ${values.format}`);
-  if (values.symbol && values.entry) throw new Error('Select either --entry or --symbol.');
+  const directory = positionals[0] ?? '.';
+  if (values.symbol && (values.entry || values['package-entries']))
+    throw new Error('Select either --entry or --symbol.');
   if (values.symbol && values.format === 'markdown') throw new Error('--symbol supports summary and json formats.');
-  const inventory = scan(positionals[0] ?? '.', {
+  const inventory = scan(directory, {
     projects: values.project ?? [],
     exclude: values.exclude ?? [],
     scopes: { test: values.test ?? [], tooling: values.tooling ?? [], production: values.production ?? [] },
   });
-  const paths = values.entry ? reachability(inventory, values.entry) : null;
+  const entries = [...(values.entry ?? []), ...(values['package-entries'] ? packageEntries(directory, inventory) : [])];
+  const paths = entries.length ? reachability(inventory, entries) : null;
   const selected = values.symbol ? usages(inventory, values.symbol) : null;
   const output =
     values.format === 'json'

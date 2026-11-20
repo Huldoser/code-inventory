@@ -4,7 +4,14 @@ Find where JavaScript and TypeScript declarations are used. The CLI and library 
 
 ## Run your first scan
 
-Build from a checkout with Node.js 26 or newer. CI uses the version in [.node-version](.node-version).
+In a JavaScript or TypeScript project with Node.js 26 or newer:
+
+```sh
+npm install --save-dev code-inventory
+npx code-inventory .
+```
+
+For a checkout of this repository, use the fixture to check how calls are counted. CI uses the version in [.node-version](.node-version).
 
 ```sh
 npm ci --ignore-scripts --no-audit
@@ -36,12 +43,13 @@ Check diagnostics before interpreting counts. Call sites measure source occurren
 
 ## Use the library
 
-From an ES module in the repository root:
+From an ES module in a project with the package installed:
 
 ```js
-import { scan, usages, reachability } from './dist/index.js';
+import { scan, usages, reachability } from 'code-inventory';
 
-const inventory = scan('test/fixtures/basic');
+// For a project with an app.ts entry and a normalize declaration:
+const inventory = scan('.');
 const usage = usages(inventory, 'normalize');
 const paths = reachability(inventory, ['app.ts']);
 ```

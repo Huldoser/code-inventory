@@ -1,3 +1,4 @@
+import { compare } from './discovery.ts';
 import type { Reachability } from './reachability.ts';
 import { findings, usages } from './query.ts';
 import type { Inventory, Usage } from './model.ts';
@@ -7,6 +8,8 @@ export function summary(inventory: Inventory): string {
   const analyzed = inventory.files.filter((file) => file.status === 'analyzed').length;
   const calls = inventory.references.filter((reference) => reference.kind === 'call').length;
   const candidates = findings(inventory);
+  const causes = new Map<string, number>();
+  for (const { code } of inventory.diagnostics) causes.set(code, (causes.get(code) ?? 0) + 1);
   return (
     [
       `Code inventory: ${analyzed} analyzed files, ${inventory.symbols.length} symbols`,
@@ -14,6 +17,9 @@ export function summary(inventory: Inventory): string {
       `${candidates.filter((finding) => finding.kind === 'no-references-found').length} symbols with no references found`,
       `${candidates.filter((finding) => finding.kind === 'exported-without-local-usage').length} exports without local usage`,
       `Analysis: ${inventory.completeness}; ${inventory.diagnostics.length} diagnostics`,
+      ...Array.from(causes)
+        .sort(([a], [b]) => compare(a, b))
+        .map(([code, count]) => `  ${code}: ${count}`),
       'Static evidence only; no-reference findings are not proof of dead code.',
     ].join('\n') + '\n'
   );

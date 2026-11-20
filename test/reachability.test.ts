@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { expect, it } from 'vitest';
-import { reachability, scan, usages } from '../src/index.ts';
+import { entryPath, packageEntries, reachability, scan, usages } from '../src/index.ts';
 
 const root = resolve(import.meta.dirname, 'fixtures/reachability');
 const inventory = scan(root);
@@ -58,4 +58,22 @@ it('rejects missing entries and returns the library report from the compiled CLI
   expect(JSON.parse(run('--entry', 'main.ts', '--format', 'json').stdout)).toEqual(report);
   expect(run('--entry', 'main.ts', '--format', 'markdown').stdout).toContain('## Paths');
   expect(run('--entry', 'missing.ts').status).toBe(1);
+});
+
+it('uses package exports and bins as roots and reconstructs a shortest declaration path', () => {
+  const roots = packageEntries(root, inventory);
+  expect(roots).toEqual(['alternate.ts', 'main.ts']);
+  const cli = resolve(import.meta.dirname, '../dist/cli.js');
+  const result = spawnSync(process.execPath, [cli, root, '--package-entries', '--format', 'json'], {
+    encoding: 'utf8',
+  });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toEqual(reachability(inventory, roots));
+  const leaf = usages(inventory, 'leaf').symbol.id;
+  expect(entryPath(report, leaf)?.map((n) => n.id)).toEqual([
+    'module:main.ts',
+    usages(inventory, 'start').symbol.id,
+    leaf,
+  ]);
+  expect(entryPath(report, usages(inventory, 'left').symbol.id)).toBeNull();
 });
