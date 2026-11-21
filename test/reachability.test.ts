@@ -7,6 +7,43 @@ const root = resolve(import.meta.dirname, 'fixtures/reachability');
 const inventory = scan(root);
 const report = reachability(inventory, ['main.ts']);
 
+it('traces an explicitly invoked route handler independently of loading the route file', () => {
+  const directory = resolve(import.meta.dirname, 'fixtures/route');
+  const run = (...args: string[]) =>
+    spawnSync(
+      process.execPath,
+      [resolve(import.meta.dirname, '../dist/cli.js'), directory, ...args, '--format', 'json'],
+      {
+        encoding: 'utf8',
+      },
+    );
+  const file = run('--entry-glob', 'app/**/route.ts');
+  expect(JSON.parse(file.stdout).declarations.every((s: { status: string }) => s.status === 'no-known-path')).toBe(
+    true,
+  );
+  const selected = run('--entry-symbol', 'GET');
+  expect(selected.stderr).toBe('');
+  expect(selected.status).toBe(0);
+  const paths = JSON.parse(selected.stdout);
+  const inventory = scan(directory);
+  const get = usages(inventory, 'GET').symbol.id;
+  const helper = usages(inventory, 'statusText').symbol.id;
+  expect(paths.entrySymbols).toEqual([get]);
+  expect(paths.entries).toEqual([]);
+  expect(entryPath(paths, helper)).toEqual([
+    { id: get, via: null },
+    {
+      id: helper,
+      via: { from: get, kind: 'call', location: expect.objectContaining({ file: 'app/status/route.ts', line: 2 }) },
+    },
+  ]);
+  expect(entryPath(paths, usages(inventory, 'POST').symbol.id)).toBeNull();
+  expect(reachability(inventory, [], { entrySymbols: [get, 'GET'] })).toEqual(paths);
+  expect(reachability(inventory, ['app/status/route.ts'], { entrySymbols: [get] }).entries).toEqual([
+    'app/status/route.ts',
+  ]);
+});
+
 it('traces calls, constructors and module initialization without rooting declarations solely by import', () => {
   expect(inventory.diagnostics).toEqual([]);
   expect(
@@ -76,4 +113,53 @@ it('uses package exports and bins as roots and reconstructs a shortest declarati
     leaf,
   ]);
   expect(entryPath(report, usages(inventory, 'left').symbol.id)).toBeNull();
+});
+
+it('expands package patterns against source and compiler outputs, honoring private and remapped subpaths', () => {
+  const dir = resolve(import.meta.dirname, 'fixtures/export-patterns');
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolve(import.meta.dirname, '../dist/cli.js'),
+      dir,
+      '--project',
+      'tsconfig.json',
+      '--project',
+      'jsconfig.json',
+      '--package-entries',
+      '--format',
+      'json',
+    ],
+    { encoding: 'utf8' },
+  );
+  expect(result.stderr).toBe('');
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout).entries).toEqual([
+    'src/group/public.ts',
+    'src/nested/open.ts',
+    'src/visible.ts',
+    'variants/red/red.cjs',
+  ]);
+});
+
+it('combines entry globs with explicit and package roots and rejects a glob matching only excluded files', () => {
+  const run = (...args: string[]) =>
+    spawnSync(process.execPath, [resolve(import.meta.dirname, '../dist/cli.js'), root, ...args], { encoding: 'utf8' });
+  const selected = run(
+    '--entry-glob',
+    './{init,main}.ts',
+    '--entry',
+    'init.ts',
+    '--entry-glob',
+    'alt*.ts',
+    '--package-entries',
+    '--format',
+    'json',
+  );
+  expect(selected.status).toBe(0);
+  expect(JSON.parse(selected.stdout)).toEqual(reachability(inventory, ['alternate.ts', 'main.ts', 'init.ts']));
+  const excluded = run('--entry', 'main.ts', '--entry-glob', 'late*.ts', '--exclude', 'late.ts');
+  expect(excluded.status).toBe(1);
+  expect(excluded.stderr).toContain('No analyzed entry files match: late*.ts');
+  expect(run('--entry-glob', '*.ts', '--symbol', 'leaf').status).toBe(1);
 });

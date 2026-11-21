@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import { isBuiltin } from 'node:module';
+import manifest from '../package.json' with { type: 'json' };
 import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadProjects, projectOwners, fileRules } from './projects.ts';
@@ -32,7 +33,7 @@ export function scan(rootDirectory: string, settings: ScanOptions = {}): Invento
   const analyzed = new Set<string>();
   const inventory: Inventory = {
     schemaVersion: 1,
-    analyzer: { name: 'code-inventory', version: '0.1.0', compilerVersion: ts.version },
+    analyzer: { name: 'code-inventory', version: manifest.version, compilerVersion: ts.version },
     snapshotId: '',
     config: {
       path: configPath ? portablePath(root, configPath) : null,

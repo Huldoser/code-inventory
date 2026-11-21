@@ -1,4 +1,5 @@
 import { posix } from 'node:path';
+import { selectSymbol } from './query.ts';
 import type { CodeSymbol, Inventory, Location, ModuleReference } from './model.ts';
 
 type Step = {
@@ -10,6 +11,7 @@ type Step = {
 export interface Reachability {
   snapshotId: string;
   entries: string[];
+  entrySymbols?: string[];
   completeness: Inventory['completeness'];
   diagnostics: Inventory['diagnostics'];
   /** One shortest-path predecessor per reached module or declaration. Roots have no predecessor. */
@@ -20,11 +22,31 @@ export interface Reachability {
 
 const moduleId = (file: string) => 'module:' + file;
 
-/** Trace resolved direct calls, construction and literal module edges from explicit source files. */
-export function reachability(inventory: Inventory, files: readonly string[]): Reachability {
-  const entries = [...new Set(files.map((file) => posix.normalize(file)))].sort();
-  if (!entries.length) throw new Error('Select at least one entry file.');
+/** Trace resolved direct calls, construction and literal module edges from selected source files. */
+export function reachability(
+  inventory: Inventory,
+  files: readonly string[],
+  options: { entryGlobs?: readonly string[]; entrySymbols?: readonly string[] } = {},
+): Reachability {
+  const selected = new Set(files.map((file) => posix.normalize(file)));
   const analyzed = new Set(inventory.files.filter((file) => file.status === 'analyzed').map((file) => file.path));
+  for (const glob of options.entryGlobs ?? []) {
+    const pattern = glob.replace(/^\.\//, '');
+    const matches = [...analyzed].filter((file) => posix.matchesGlob(file, pattern));
+    if (!matches.length) throw new Error('No analyzed entry files match: ' + glob);
+    for (const file of matches) selected.add(file);
+  }
+  const entries = [...selected].sort();
+  const invoked = new Set<string>();
+  for (const selector of options.entrySymbols ?? []) {
+    const symbol = selectSymbol(inventory, selector);
+    if (!['function', 'method', 'constructor'].includes(symbol.kind)) {
+      throw new Error('Entry symbol must be a function, method or constructor: ' + selector);
+    }
+    invoked.add(symbol.id);
+  }
+  const entrySymbols = [...invoked].sort();
+  if (!entries.length && !entrySymbols.length) throw new Error('Select at least one entry file or symbol.');
   for (const file of entries) {
     if (!analyzed.has(file)) throw new Error('Entry file was not analyzed: ' + file);
   }
@@ -66,7 +88,7 @@ export function reachability(inventory: Inventory, files: readonly string[]): Re
     });
   }
 
-  const queue = entries.map(moduleId);
+  const queue = [...entries.map(moduleId), ...entrySymbols];
   const paths = new Map<string, Step | null>(queue.map((id) => [id, null]));
   for (let index = 0; index < queue.length; index++) {
     for (const { to, via } of edges.get(queue[index]!) ?? []) {
@@ -78,6 +100,7 @@ export function reachability(inventory: Inventory, files: readonly string[]): Re
   return {
     snapshotId: inventory.snapshotId,
     entries,
+    ...(entrySymbols.length ? { entrySymbols } : {}),
     completeness: inventory.completeness,
     diagnostics: inventory.diagnostics,
     reached: [...paths].map(([id, via]) => ({ id, via })),

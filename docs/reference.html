@@ -60,11 +60,29 @@
           <dd>Query one declaration by exact unique name or snapshot ID. Supports summary and JSON.</dd>
           <dt><code>--package-entries</code></dt>
           <dd>
-            Trace module initialization from the root package's explicit exports (or main) and bin targets. All runtime
+            Trace module initialization from the root package's exports (or main) and bin targets. All runtime
             conditions and array alternatives contribute roots. Type-only branches, declaration files and JSON targets
             are skipped. Combine with --entry for framework or implicit roots. For compiled packages select the emitting
-            --project so the compiler can map outputs to analyzed inputs. Wildcards and unmapped outputs require
-            explicit source entries instead. External invocations of exported functions are outside this trace.
+            --project so the compiler can map outputs to analyzed inputs. Subpath patterns such as
+            <code>"./features/*": "./dist/*.js"</code> expand against analyzed files and their predicted JavaScript
+            outputs. An exact subpath or a more specific pattern takes precedence, including private paths blocked with
+            <code>null</code>. If a target pattern has no matching source or predicted output, select its source
+            explicitly with <code>--entry</code>. External invocations of exported functions are outside this trace.
+          </dd>
+          <dt><code>--entry-symbol name-or-id</code></dt>
+          <dd>
+            Assume a function, method or constructor is invoked and trace calls from its body. For example, select
+            <code>GET</code> when reviewing a route handler. A repeated name requires the snapshot ID shown in the
+            ambiguity message. Repeat the option for multiple invocations. Add file entries to include module
+            initialization. The library accepts <code>reachability(inventory, [], { entrySymbols: ['GET'] })</code>. The
+            report records these assumptions as snapshot IDs in the optional <code>entrySymbols</code> array.
+          </dd>
+          <dt><code>--entry-glob glob</code></dt>
+          <dd>
+            Trace analyzed files matching a quoted, root-relative pattern such as <code>'src/routes/**/+page.ts'</code>.
+            Repeat the option or combine it with --entry and --package-entries. Each pattern must match an analyzed
+            file. Library callers can pass
+            <code>reachability(inventory, [], { entryGlobs: ['src/routes/**/+page.ts'] })</code>.
           </dd>
           <dt><code>--entry source-file</code></dt>
           <dd>
@@ -162,8 +180,8 @@
           directory synchronously. The other queries operate on its inventory or reachability report, except
           packageEntries(directory, inventory), which also reads the matching manifest and build configuration. Pass its
           result to reachability. entryPath(report, symbolId) returns the ordered nodes of one shortest path, including
-          the module root and target, or null for an unreached ID. Select the ID with usages. Each non-root node carries
-          the edge kind and source location. summary, usageText and markdown render display text.
+          the selected file or invocation root and target, or null for an unreached ID. Select the ID with usages. Each
+          non-root node carries the edge kind and source location. summary, usageText and markdown render display text.
         </p>
         <p>
           The <a href="report-schema.json">JSON Schema</a> describes all three CLI report shapes. For persisted data

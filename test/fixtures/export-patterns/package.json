@@ -1,0 +1,14 @@
+{
+  "name": "example-export-patterns",
+  "exports": {
+    "./features/*.js": {
+      "types": "./types/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./features/hidden.js": null,
+    "./features/nested/*": null,
+    "./features/nested/open.js": "./dist/nested/open.js",
+    "./features/legacy.js": "./dist/visible.js",
+    "./variants/*": "./variants/*/*.cjs"
+  }
+}
