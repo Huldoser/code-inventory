@@ -32,7 +32,7 @@ function* expandPatterns(patterns: ExportPattern[], subpaths: string[], candidat
       const value = capture(parts, path);
       if (value === null) continue;
       matched = true;
-      const subpath = key.replace('*', () => value);
+      const subpath = key.replaceAll('*', () => value);
       if (exact.has(subpath)) continue;
       const winner = keys.find(({ parts }) => capture(parts, subpath) !== null);
       if (winner?.key === key) yield path;
