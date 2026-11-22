@@ -123,6 +123,11 @@
           resolution. Discovered files excluded from the inventory carry a reason.
         </p>
         <p>
+          When a JavaScript file imports an explicit relative path such as <code>./codec.js</code>, the scanner traces
+          references into that implementation if it is in scope, even when it has an adjacent declaration file.
+          TypeScript diagnostics still use the project's declared types.
+        </p>
+        <p>
           Paths containing <code>test</code>, <code>tests</code>, <code>__tests__</code>, <code>__mocks__</code>, or
           <code>fixtures</code> as directory names, and <code>.test</code> or <code>.spec</code> files, receive test
           scope. The scanner labels <code>scripts</code>, <code>tools</code>, and <code>*.config.*</code> as tooling.

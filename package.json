@@ -1,6 +1,6 @@
 {
   "name": "code-inventory",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "type": "module",
   "description": "Static code inventory for JavaScript and TypeScript. Find symbol usages and trace paths from entry points.",
