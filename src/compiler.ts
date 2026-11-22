@@ -2,7 +2,7 @@ import ts from 'typescript';
 import { isBuiltin } from 'node:module';
 import manifest from '../package.json' with { type: 'json' };
 import { realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, extname, resolve } from 'node:path';
 import { loadProjects, projectOwners, fileRules } from './projects.ts';
 import type { Project, ScanOptions } from './projects.ts';
 import { compare, discover, hash, hashFile, portablePath } from './discovery.ts';
@@ -16,6 +16,13 @@ const limitations = [
   'Each source file is counted in one project context; configuration-dependent alternatives may differ.',
   'Symbol IDs are snapshot-local and may change when source locations change.',
 ];
+
+const javascriptDeclarations = new Map([
+  [ts.Extension.Js, ts.Extension.Dts],
+  [ts.Extension.Jsx, ts.Extension.Dts],
+  [ts.Extension.Mjs, ts.Extension.Dmts],
+  [ts.Extension.Cjs, ts.Extension.Dcts],
+]);
 
 /** Scan a project using the compiler API without emitting or executing project code. */
 export function scan(rootDirectory: string, settings: ScanOptions = {}): Inventory {
@@ -141,7 +148,43 @@ function analyze(
     types: project.options.types ?? [],
   };
   const host = { ...ts.createCompilerHost(options), useSourceOfProjectReferenceRedirect: () => true };
-  const program = ts.createProgram({ rootNames, options, host, projectReferences: project.references });
+  const programOptions = { rootNames, options, projectReferences: project.references };
+  let resolvedJavaScript = false;
+  const resolutionCache = ts.createModuleResolutionCache(
+    host.getCurrentDirectory(),
+    host.getCanonicalFileName,
+    options,
+  );
+  const program = ts.createProgram({
+    ...programOptions,
+    host: {
+      ...host,
+      resolveModuleNameLiterals(literals, from, redirect, settings, source) {
+        return literals.map((literal) => {
+          const mode = ts.getModeForUsageLocation(source, literal, settings);
+          const result = ts.resolveModuleName(literal.text, from, settings, host, resolutionCache, redirect, mode);
+          const runtime = relativeJavaScript(from, literal.text, result.resolvedModule);
+          if (!runtime) return result;
+          resolvedJavaScript = true;
+          return { ...result, resolvedModule: runtime };
+        });
+      },
+    },
+  });
+
+  function relativeJavaScript(from: string, specifier: string, resolved: ts.ResolvedModuleFull | undefined) {
+    if (!resolved || !/\.d\.[cm]?ts$/.test(resolved.resolvedFileName) || !/^\.{1,2}\//.test(specifier)) return;
+    if (!javascriptDeclarations.has(extname(from) as ts.Extension)) return;
+    const extension = extname(specifier) as ts.Extension;
+    const declarationExtension = javascriptDeclarations.get(extension);
+    if (!declarationExtension) return;
+    const runtime = resolve(dirname(from), specifier);
+    if (
+      eligible.has(runtime) &&
+      resolved.resolvedFileName === runtime.slice(0, -extension.length) + declarationExtension
+    )
+      return { ...resolved, resolvedFileName: runtime, extension };
+  }
   const checker = program.getTypeChecker();
   const sources = program
     .getSourceFiles()
@@ -161,10 +204,12 @@ function analyze(
     collectExports(source);
     visit(source, null);
   }
+  // Keep the project's declared types authoritative for compiler diagnostics.
+  const diagnosticProgram = resolvedJavaScript ? ts.createProgram({ ...programOptions, host }) : program;
   for (const diagnostic of [
-    ...program.getSyntacticDiagnostics(),
-    ...program.getOptionsDiagnostics(),
-    ...program.getSemanticDiagnostics(),
+    ...diagnosticProgram.getSyntacticDiagnostics(),
+    ...diagnosticProgram.getOptionsDiagnostics(),
+    ...diagnosticProgram.getSemanticDiagnostics(),
   ]) {
     if (!diagnostic.file || owners.get(diagnostic.file.fileName) === project) addCompilerDiagnostic(diagnostic);
   }
@@ -405,7 +450,12 @@ function analyze(
       kind,
       location: location(specifier),
       typeOnly,
-      resolvedFile: resolved ? portablePath(root, resolved.resolvedFileName) : null,
+      resolvedFile: resolved
+        ? portablePath(
+            root,
+            (relativeJavaScript(node.getSourceFile().fileName, specifier.text, resolved) ?? resolved).resolvedFileName,
+          )
+        : null,
     });
     if (!resolved && !isBuiltin(specifier.text))
       diagnostics.push({

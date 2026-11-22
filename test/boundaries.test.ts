@@ -66,6 +66,30 @@ describe('analysis boundaries', () => {
     expect(paths.diagnostics).toEqual([]);
   });
 
+  it('traces namespace calls through adjacent JavaScript declarations to exported implementations', () => {
+    const inventory = scan(fixture('typed-js'));
+    const refs = usages(inventory, 'encode').references.filter((ref) => ref.location.file === 'consumer.test.js');
+    expect(refs.map((ref) => [ref.location.line, ref.kind, ref.scope])).toEqual([
+      [4, 'call', 'test'],
+      [5, 'read', 'test'],
+      [6, 'call', 'test'],
+    ]);
+    expect(usages(inventory, 'hidden').counts.references).toBe(0);
+    expect(inventory.modules.find((edge) => edge.location.file === 'consumer.test.js')?.resolvedFile).toBe('index.js');
+    expect(inventory.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'unresolved-call',
+        location: expect.objectContaining({ file: 'consumer.test.js', line: 7 }),
+      }),
+    );
+    expect(inventory.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'TS2345',
+        location: expect.objectContaining({ file: 'consumer.test.js', line: 6 }),
+      }),
+    );
+  });
+
   it('reports parse and configuration errors as incomplete analysis', () => {
     const invalid = scan(fixture('invalid'));
     expect(invalid.completeness).toBe('partial');
