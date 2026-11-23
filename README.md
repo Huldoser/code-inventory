@@ -37,6 +37,10 @@ The lines that follow identify each reference by file, line, column, kind, and s
 | How do I save the full snapshot?      | `node dist/cli.js test/fixtures/basic --format json --output inventory.json` |
 | How do I scan one TypeScript project? | `node dist/cli.js . --project tsconfig.build.json`                           |
 
+In a Git checkout, run `npx code-inventory . --changed-since main` to see the declarations touched by tracked
+source changes, their exports, and references grouped by caller or test file. Deleted files and removed base lines
+appear separately. The query uses the current checkout, including staged and unstaged edits.
+
 For convention-based entry points, use a quoted pattern such as `--entry-glob 'src/routes/**/+page.ts'`. Combine it with `--package-entries` to include a package’s public entry files.
 
 To review what an external caller can reach by invoking a handler, use `--entry-symbol GET`. If several declarations share that name, the CLI lists their snapshot IDs. File entries trace module initialization. Combining both options includes both starting points.

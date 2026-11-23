@@ -4,7 +4,7 @@ import { relative, resolve, sep } from 'node:path';
 import type { Scope } from './model.ts';
 
 const excludedDirectories = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', '.output']);
-const sourceExtension = /\.(?:[cm]?[jt]s|[jt]sx)$/;
+export const sourceExtension = /\.(?:[cm]?[jt]s|[jt]sx)$/;
 
 /** Return sorted source paths without following symlinks or traversing build/dependency folders. */
 export function discover(root: string): string[] {

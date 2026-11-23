@@ -58,6 +58,16 @@
           </dd>
           <dt><code>--symbol name-or-id</code></dt>
           <dd>Query one declaration by exact unique name or snapshot ID. Supports summary and JSON.</dd>
+          <dt><code>--changed-since revision</code></dt>
+          <dd>
+            Compare a local Git revision directly with the tracked working tree under the scan root, including staged
+            and unstaged changes. Untracked files enter the diff once staged. The summary groups current references by
+            caller or test file and shows module exports, including re-exports. Changed lines select overlapping
+            declarations, including an enclosing declaration when the line also contains its own code. Reads include
+            callback arguments. Test references identify source sites and do not establish runtime coverage. Removed
+            lines use base coordinates. Deleted files and the old side of renames have no current declaration to query.
+            Use this option on its own with summary output.
+          </dd>
           <dt><code>--package-entries</code></dt>
           <dd>
             Trace module initialization from the root package's exports (or main) and bin targets. All runtime
