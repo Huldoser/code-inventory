@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { writeFileSync } from 'node:fs';
 import { packageEntries, reachability, scan, markdown, summary, usages, usageText } from './index.ts';
 
+import { changeImpactText } from './change-impact.ts';
 import { reachabilityText } from './report.ts';
 
 /** Run a read-only scan; output files must be new paths to avoid overwriting user work. */
@@ -20,6 +21,7 @@ function main(): void {
       tooling: { type: 'string', multiple: true },
       production: { type: 'string', multiple: true },
       format: { type: 'string', default: 'summary' },
+      'changed-since': { type: 'string' },
       symbol: { type: 'string' },
       output: { type: 'string' },
       strict: { type: 'boolean', default: false },
@@ -28,7 +30,7 @@ function main(): void {
   });
   if (values.help) {
     process.stdout.write(
-      'Usage: code-inventory [directory] [--entry source-file] [--entry-glob glob] [--entry-symbol name-or-id] [--package-entries] [--project config] [--exclude glob] [--test glob] [--tooling glob] [--production glob] [--format summary|json|markdown] [--symbol name-or-id] [--output new-file] [--strict]\n',
+      'Usage: code-inventory [directory] [--entry source-file] [--entry-glob glob] [--entry-symbol name-or-id] [--package-entries] [--project config] [--exclude glob] [--test glob] [--tooling glob] [--production glob] [--format summary|json|markdown] [--symbol name-or-id] [--changed-since revision] [--output new-file] [--strict]\n',
     );
     return;
   }
@@ -38,41 +40,52 @@ function main(): void {
   const entryQuery = values.entry || values['entry-glob'] || values['entry-symbol'] || values['package-entries'];
   if (values.symbol && entryQuery) throw new Error('Select either entry points or --symbol.');
   if (values.symbol && values.format === 'markdown') throw new Error('--symbol supports summary and json formats.');
+  const base = values['changed-since'];
+  if (base !== undefined && (entryQuery || values.symbol !== undefined || values.format !== 'summary'))
+    throw new Error('--changed-since is a standalone summary query.');
   const inventory = scan(directory, {
     projects: values.project ?? [],
     exclude: values.exclude ?? [],
     scopes: { test: values.test ?? [], tooling: values.tooling ?? [], production: values.production ?? [] },
   });
-  const entries = [...(values.entry ?? []), ...(values['package-entries'] ? packageEntries(directory, inventory) : [])];
-  const paths = entryQuery
-    ? reachability(inventory, entries, {
-        entryGlobs: values['entry-glob'] ?? [],
-        entrySymbols: values['entry-symbol'] ?? [],
-      })
-    : null;
-  const selected = values.symbol ? usages(inventory, values.symbol) : null;
-  const output =
-    values.format === 'json'
-      ? JSON.stringify(
-          selected
-            ? {
-                schemaVersion: inventory.schemaVersion,
-                snapshotId: inventory.snapshotId,
-                completeness: inventory.completeness,
-                diagnostics: inventory.diagnostics,
-                usage: selected,
-              }
-            : (paths ?? inventory),
-          null,
-          2,
-        ) + '\n'
-      : paths
-        ? reachabilityText(paths, values.format === 'markdown')
-        : selected
-          ? usageText(selected) + `Analysis: ${inventory.completeness}; ${inventory.diagnostics.length} diagnostics\n`
-          : values.format === 'markdown'
-            ? markdown(inventory)
-            : summary(inventory);
+  let output: string;
+  if (base !== undefined) {
+    output = changeImpactText(directory, base, inventory);
+  } else {
+    const entries = [
+      ...(values.entry ?? []),
+      ...(values['package-entries'] ? packageEntries(directory, inventory) : []),
+    ];
+    const paths = entryQuery
+      ? reachability(inventory, entries, {
+          entryGlobs: values['entry-glob'] ?? [],
+          entrySymbols: values['entry-symbol'] ?? [],
+        })
+      : null;
+    const selected = values.symbol ? usages(inventory, values.symbol) : null;
+    output =
+      values.format === 'json'
+        ? JSON.stringify(
+            selected
+              ? {
+                  schemaVersion: inventory.schemaVersion,
+                  snapshotId: inventory.snapshotId,
+                  completeness: inventory.completeness,
+                  diagnostics: inventory.diagnostics,
+                  usage: selected,
+                }
+              : (paths ?? inventory),
+            null,
+            2,
+          ) + '\n'
+        : paths
+          ? reachabilityText(paths, values.format === 'markdown')
+          : selected
+            ? usageText(selected) + `Analysis: ${inventory.completeness}; ${inventory.diagnostics.length} diagnostics\n`
+            : values.format === 'markdown'
+              ? markdown(inventory)
+              : summary(inventory);
+  }
   if (values.output) writeFileSync(values.output, output, { flag: 'wx' });
   else process.stdout.write(output);
   if (values.strict && inventory.completeness === 'partial') process.exitCode = 2;
