@@ -47,6 +47,8 @@ To review what an external caller can reach by invoking a handler, use `--entry-
 
 Repeat `--entry` to combine entry points or `--project` to select multiple configs. Output files must be new. Use `--strict` when a partial result should set exit code 2. The CLI still produces the report.
 
+For scripts that save JSON, see the [0.x report compatibility rules](docs/reference.html#compatibility) and [CLI exit codes](docs/reference.html#exit-codes).
+
 Check diagnostics before interpreting counts. Call sites measure source occurrences. Runtime dispatch, callbacks, and external consumers can introduce paths the scanner cannot see. Review declarations with no known path before considering removal.
 
 ## Use the library

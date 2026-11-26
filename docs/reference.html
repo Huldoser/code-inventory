@@ -28,9 +28,11 @@
         <strong>On this page</strong>
         <nav aria-label="On this page">
           <a href="#cli">CLI options</a>
+          <a href="#exit-codes">Exit codes</a>
           <a href="#projects">Project selection</a>
           <a href="#counts">Counts and findings</a>
           <a href="#snapshot">JSON snapshot</a>
+          <a href="#compatibility">Saved reports and upgrades</a>
           <a href="#boundaries">Analysis limits</a>
         </nav>
       </aside>
@@ -104,12 +106,27 @@
           <dt><code>--output new-file</code></dt>
           <dd>Write the result to a new file. An existing path produces an error.</dd>
           <dt><code>--strict</code></dt>
-          <dd>
-            Write the report and exit with code 2 for a partial scan. A successful scan otherwise exits with 0. Invalid
-            arguments and filesystem errors exit with 1.
-          </dd>
+          <dd>Signal a partial scan after writing its report. See <a href="#exit-codes">exit codes</a>.</dd>
           <dt><code>-h</code>, <code>--help</code></dt>
           <dd>Print usage and exit.</dd>
+        </dl>
+        <h2 id="exit-codes">Exit codes</h2>
+        <dl>
+          <dt><code>0</code> · Success</dt>
+          <dd>
+            The CLI printed help or produced the requested report. Without <code>--strict</code>, both complete and
+            partial scans succeed. Check the JSON <code>completeness</code> field when the distinction matters.
+          </dd>
+          <dt><code>1</code> · Command failed</dt>
+          <dd>
+            An invalid option, failed query, or read or write error sends an explanation to stderr. Stop before
+            consuming output. In particular, an existing <code>--output</code> file may be from an earlier run.
+          </dd>
+          <dt><code>2</code> · Strict scan produced a partial report</dt>
+          <dd>
+            Read the report from stdout or the new file named by <code>--output</code>. Inspect its diagnostics before
+            using the results. A complete scan with <code>--strict</code> exits with 0.
+          </dd>
         </dl>
         <h2 id="projects">Project selection</h2>
         <pre><code>node dist/cli.js . --project tsconfig.build.json --exclude '**/generated/**' --test 'qa/**'</code></pre>
@@ -198,14 +215,52 @@
           the selected file or invocation root and target, or null for an unreached ID. Select the ID with usages. Each
           non-root node carries the edge kind and source location. summary, usageText and markdown render display text.
         </p>
+        <h2 id="compatibility">Saved reports and 0.x upgrades</h2>
         <p>
-          The <a href="report-schema.json">JSON Schema</a> describes all three CLI report shapes. For persisted data
-          check schemaVersion before reading a full inventory or symbol response. The entry response has the
-          Reachability shape in the shipped TypeScript declarations. In 0.1.0 it has no schemaVersion. Keep analyzer and
-          compiler versions from the full snapshot alongside query results. Use snapshot-local IDs for joins. Accept
-          additional fields and unknown diagnostic codes. Compare counts across upgrades against source examples;
-          changes in resolution can change a result even when its shape stays compatible. Keep the generating version
-          for older snapshots. During 0.x the format and API can change.
+          Use <code>--format json</code> for scripts. The packaged <a href="report-schema.json">JSON Schema</a> lists
+          the required properties, types, allowed values and nullable fields for each report. Summary, Markdown,
+          diagnostic messages and limitation text are for display. <code>--changed-since</code> produces a text summary.
+        </p>
+        <dl>
+          <dt>Full inventory</dt>
+          <dd>
+            Require <code>schemaVersion === 1</code> for the layout above. Save the full inventory to run new
+            <code>usages</code> or <code>reachability</code> queries later. Use <code>analyzer.version</code> and
+            <code>analyzer.compilerVersion</code> to identify the producer.
+          </dd>
+          <dt>Symbol query</dt>
+          <dd>
+            Require <code>schemaVersion === 1</code> and read <code>usage.symbol</code>,
+            <code>usage.references</code> and <code>usage.counts</code>. The CLI puts snapshot-wide diagnostics
+            alongside <code>usage</code>.
+          </dd>
+          <dt>Entry query</dt>
+          <dd>
+            In 0.3.0 this report has no <code>schemaVersion</code>. Validate it against the schema’s
+            <code>entryReport</code> definition. File roots appear in <code>entries</code>. The optional
+            <code>entrySymbols</code> lists explicitly invoked declarations. Use <code>reached</code> to reconstruct
+            paths and <code>declarations</code> to look up reachability status.
+          </dd>
+        </dl>
+        <p>
+          All three shapes carry <code>snapshotId</code>, <code>completeness</code> and <code>diagnostics</code>. Keep
+          the matching inventory or its producer metadata with a saved query. Treat IDs as opaque and join records only
+          within the same snapshot. A fresh scan with an improved resolver can produce different IDs, counts, paths or
+          diagnostics for the same source.
+        </p>
+        <p>
+          Within schema version 1, readers can rely on required fields and their documented meanings. Producers may add
+          optional fields and diagnostic codes. Ignore unfamiliar properties, handle unfamiliar codes, and allow
+          optional fields such as <code>files[].project</code> to be absent. A required field with a nullable type, such
+          as <code>references[].callerId</code>, is present even when its value is <code>null</code>.
+        </p>
+        <p>
+          During 0.x, a change that invalidates existing reports or breaks a reader following these rules belongs in a
+          new minor release with migration instructions. An incompatible JSON shape also needs a new schema version,
+          including an explicit version on a replacement for the unversioned entry report. A change to the documented
+          exit codes is likewise a breaking CLI change. Before moving to another minor release, validate a saved report
+          with the target schema and replay a representative query. For an unsupported version, retain the original
+          report and use its generating release until you migrate.
         </p>
         <p>
           TS-prefixed codes are compiler diagnostics. unresolved-module and dynamic-module identify missing module
