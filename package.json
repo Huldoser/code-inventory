@@ -1,6 +1,6 @@
 {
   "name": "code-inventory",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "MIT",
   "type": "module",
   "description": "Static code inventory for JavaScript and TypeScript. Find symbol usages and trace paths from entry points.",
@@ -52,10 +52,10 @@
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "devDependencies": {
-    "@types/node": "26.6.6",
+    "@types/node": "26.6.11",
     "eslint": "10.15.0",
     "prettier": "3.10.1",
-    "typescript-eslint": "8.73.0",
-    "vitest": "5.1.1"
+    "typescript-eslint": "8.74.0",
+    "vitest": "5.1.2"
   }
 }
